@@ -3,9 +3,6 @@ import time
 import random
 import numpy as np
 
-from plot_utils import plot_state
-
-
 # CONSTANTS
 BOARD_H, BOARD_W = [6, 7]
 
@@ -16,39 +13,78 @@ class Game:
         self.BOARD_H = 6
         self.state = None
         self.player = 0
+        self.turn = 0
+        self.done = 0
 
-    def new_game(self):
+    def reset(self, player=0): # TODO: allow random player start
         self.state = np.zeros([self.BOARD_H, self.BOARD_W, 3])
         self.state[0, :, 2] = 1
-        self.player = 0
+        self.player = player
+        self.turn = 0
+        self.done = 0
         return self.state, self.player
 
-    def step(self, action):
+    def step(self, action, player=None):
+        if player is not None:
+            assert player == self.player, 'Error, bad expected player step'
+
         self.state[action[0], action[1], self.player] = 1
         self.state[action[0], action[1], 2] = 0
         if action[0] < self.BOARD_H-1:
             self.state[action[0] + 1, action[1], 2] = 1
 
-        self.player = 1-self.player
-        return self.state, self.player
+        self.turn += 1
+        self.player = (self.player + 1) % 2
+        self.done = game_end(self.state, action)
+        reward = 1 if self.done else 0
+        if self.turn == self.BOARD_W * self.BOARD_H:
+            self.done = 1
+            reward = 0
 
-    def sim_step(self, action):
-        new_state = self.state.copy()
-        new_state[action[0], action[1], self.player] = 1
+        return self.state, reward, self.done, self.player
+
+    def sim_step(self, action, old_state=None, old_turn=None, player=None):
+        if old_state is None:
+            assert player is None and old_turn is None, \
+                'Error. Sim state - if old_state is not passed then player and old_turn are ignored'
+            new_state = self.state.copy()
+            player = self.player
+            new_turn = self.turn = 1
+        else:
+            assert player is not None and old_turn is None, \
+                'Error. Sim state - if old_state is passed then player and old_turn must be passes'
+            new_state = old_state.copy()
+            new_turn = old_turn + 1
+
+        new_state[action[0], action[1], player] = 1
         new_state[action[0], action[1], 2] = 0
         if action[0] < self.BOARD_H-1:
             new_state[action[0] + 1, action[1], 2] = 1
 
-        return new_state, self.player
+        player = (player + 1) % 2
+        done = game_end(new_state, action)
+        reward = 1 if done else 0
+        if new_turn == self.BOARD_W * self.BOARD_H:
+            done = 1
 
-    def rand_state(self, max_stage=None):
+        return new_state, reward, done, new_turn, player
+
+    def rand_state(self, max_stage=None, final=False):
         if not max_stage:
             max_stage = random.choice(range(self.BOARD_W*self.BOARD_H))
 
         self.new_game()
 
         stage = 0
-        while stage < max_stage:
+        find_final = False
+        found_final = False
+        while stage < self.BOARD_W * self.BOARD_H:
+            if stage >= max_stage and not find_final:
+                if not final:
+                    break
+                else:
+                    find_final = True
+
             #plt.imshow(self.state)
             #plt.title(stage)
             #plt.show(block=False)
@@ -60,9 +96,15 @@ class Game:
                     continue
                 action = get_action(self.state, col)
                 new_state, _ = self.sim_step(action)
-                if not game_end(new_state, action):
+                if game_end(new_state, action):
+                    if find_final:
+                        found_final = True
+                        break
+                else:
                     action_list.append(action)
 
+            if found_final:
+                break
             if len(action_list) == 0:
                 break
             else:
@@ -70,6 +112,11 @@ class Game:
                 self.step(chosen_action)
 
         return self.state, self.player, stage
+
+    def swap_state(self, player=1):
+        swapped_state = self.state.copy()
+        swapped_state[:, :, :2] = swapped_state[:, :, 1::-1]
+        return swapped_state
 
 
 def valid_action(state, col):
@@ -176,10 +223,11 @@ def check_final_step(state):
 
 if __name__ == "__main__":
 
+    from plot_utils import plot_state
     import matplotlib.pyplot as plt
+    plt.interactive(False)
 
     game = Game()
-    plt.interactive(False)
 
     plt.figure()
     N = 4
