@@ -1,23 +1,26 @@
 """
     This file is copied/apdated from https://github.com/berkeleydeeprlcourse/homework/tree/master/hw3
 """
-import sys
+import sys, time
 import pickle
 import numpy as np
-from collections import namedtuple
+from collections import namedtuple, Counter
 from itertools import count
 import random
-import gym.spaces
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.autograd as autograd
 
-#from utils.replay_buffer import ReplayBuffer
-#from utils.gym import get_wrapper_by_name
+from utils.replay_buffer import ReplayBuffer
 
-#from dqn_model import *
+from utils_game import Game
+from utils_save import save_model
+from utils_plot import plot_obs
+
+from algorithms import minimax, alphabeta
+from train_supervised import evaluate
 
 USE_CUDA = torch.cuda.is_available()
 dtype = torch.cuda.FloatTensor if torch.cuda.is_available() else torch.FloatTensor
@@ -36,50 +39,47 @@ class Variable(autograd.Variable):
 OptimizerSpec = namedtuple("OptimizerSpec", ["constructor", "kwargs"])
 
 Statistic = {
-    "mean_episode_rewards": [],
-    "best_mean_episode_rewards": []
+    'TURNS_RATE': [],
+    'ERROR_RATE': [],
+    'MINIMAX_1': [],
+    'MINIMAX_2': [],
+    'MINIMAX_4': []
 }
 
-def dqn_learing(
+
+def DQNLearning(
     env,
     q_func,
     optimizer_spec,
     policy_func,
-    stopping_criterion=None,
     replay_buffer_size=1000000,
     batch_size=32,
     gamma=0.99,
     learning_starts=100000,
-    learning_freq=4,
-    frame_history_len=4,
-    target_update_freq=10000
-    ):
-
+    learning_ends=10000000,
+    learning_freq=5,
+    frame_history_len=1,
+    target_update_freq=5,
+    log_freq=10,
+    validation_data=None,
+    validation_labels=None,
+    save_path='./checkpoints/'
+):
     """Run Deep Q-learning algorithm.
-
-    You can specify your own convnet using q_func.
-
-    All schedules are w.r.t. total number of steps taken in the environment.
 
     Parameters
     ----------
-    env: gym.Env
-        gym environment to train on.
+    env: environment
+        Environment to train on.
     q_func: function
-        Model to use for computing the q function. It should accept the
-        following named arguments:
-            input_channel: int
-                number of channel of input.
-            num_actions: int
-                number of actions
+        Model to use for computing the q function.
     optimizer_spec: OptimizerSpec
         Specifying the constructor and kwargs, as well as learning rate schedule
         for the optimizer
     exploration: Schedule (defined in utils.schedule)
         schedule for probability of chosing random action.
-    stopping_criterion: (env) -> bool
-        should return true when it's ok for the RL algorithm to stop.
-        takes in env and the number of steps executed so far.
+    stopping_criterion: (t) -> bool
+        Criterion for stopping the train routine.
     replay_buffer_size: int
         How many memories to store in the replay buffer.
     batch_size: int
@@ -94,23 +94,17 @@ def dqn_learing(
         How many past frames to include as input to the model.
     target_update_freq: int
         How many experience replay rounds (not steps!) to perform between
-        each update to the target Q network
+        each update to the target Q network.
+    validation_data: numpy array
+        Validation data for validation between epochs.
+    validation_labels: numpy array
+        Validation labels for validaition between epochs.
+
     """
-    #assert type(env.observation_space) == gym.spaces.Box
-    #assert type(env.action_space)      == gym.spaces.Discrete
 
     ###############
     # BUILD MODEL #
     ###############
-
-    #if len(env.observation_space.shape) == 1:
-    #    # This means we are running on low-dimensional observations (e.g. RAM)
-    #    input_arg = env.observation_space.shape[0]
-    #else:
-    #    img_h, img_w, img_c = env.observation_space.shape
-    #    input_arg = frame_history_len * img_c
-    #num_actions = env.action_space.n
-
     # Initialize target q function and q function, i.e. build the model.
     Q = q_func().type(dtype)
     target_Q = q_func().type(dtype)
@@ -126,79 +120,105 @@ def dqn_learing(
     ###############
     # RUN ENV     #
     ###############
-
+    # Initialize parameters
+    t0 = 0
+    t0_time = time.perf_counter()
+    epoch = 0
+    plays = 0
     num_param_updates = 0
-    mean_episode_reward = -float('nan')
-    best_mean_episode_reward = -float('inf')
-    LOG_EVERY_N_STEPS = 10000
+    store_step = False
+    state_dict = [None] * target_update_freq
+    reward_history = []
+    turn_history = []
 
-    last_obs = env.reset()
+    # Checkpoint parameters
+    min_error_rate = 1.
+    most_wins = 0
+    min_error_rate_wins = 1.
+    most_wins_minimax4 = 0
+    most_wins_with_minimax4 = 0
+    min_error_rate_minimax4 = 1.
 
+    # Initialize environment
+    last_obs, _ = env.reset()
+    done = False
+    reward = 0
+    players = env.players
+
+    validation_data = torch.Tensor(validation_data).type(dtype).cuda()
+
+    # Start train routine
     for t in count():
-        ### 1. Check stopping criterion
-        if stopping_criterion is not None and stopping_criterion(env):
+        # Check stopping criterion
+        if t > learning_ends:
             break
 
-        ### 2. Step the env and store the transition
-        # At this point, "last_obs" contains the latest observation that was
-        # recorded from the simulator. Here, your code needs to store this
-        # observation and its outcome (reward, next observation, etc.) into
-        # the replay buffer while stepping the simulator forward one step.
-        # At the end of this block of code, the simulator should have been
-        # advanced one step, and the replay buffer should contain one more
-        # transition.
-        # Specifically, last_obs must point to the new latest observation.
-        # Useful functions you'll need to call:
-        # obs, reward, done, info = env.step(action)
-        # this steps the environment forward one step
-        # obs = env.reset()
-        # this resets the environment if you reached an episode boundary.
-        # Don't forget to call env.reset() to get a new observation if done
-        # is true!!
-        # Note that you cannot use "last_obs" directly as input
-        # into your network, since it needs to be processed to include context
-        # from previous frames. You should check out the replay buffer
-        # implementation in dqn_utils.py to see what functionality the replay
-        # buffer exposes. The replay buffer has a function called
-        # encode_recent_observation that will take the latest observation
-        # that you pushed into the buffer and compute the corresponding
-        # input that should be given to a Q network by appending some
-        # previous frames.
-        # Don't forget to include epsilon greedy exploration!
-        # And remember that the first time you enter this loop, the model
-        # may not yet have been initialized (but of course, the first step
-        # might as well be random, since you haven't trained your net...)
-        #####
+        # Perform env step according to player
+        if players == 1 or env.player == 0:
+            # Store last obs
+            index_obs_stored = replay_buffer.store_frame(last_obs)
 
-        # Store last obs
-        index_obs_stored = replay_buffer.store_frame(last_obs)
+            # Get input to dqc
+            input_to_dqn = replay_buffer.encode_recent_observation()
 
-        # Get input to dqc which has N last observation
-        input_to_dqn = replay_buffer.encode_recent_observation()
+            # Choose action according to play policy
+            action, flag = policy_func(Q, input_to_dqn, t)
 
-        # Choose epsilon greedy action
-        action = policy_func(Q, input_to_dqn, t)
+            # Perform env step according to action
+            obs, reward, done, _ = env.step(action)
 
-        # Perform env step according to action
-        obs, reward, done, _ = env.step(action)
+            # Raise flag for store step
+            store_step = True
 
+        #    if plays % 1000 == 0:
+        #        plot_obs(obs, title='{} {}' .format('Random' if flag else 'Greedy', done))
         # Perform env step according to opponents
         if players > 1:
-            for n in range(1, players):
+            while env.player != 0:
                 if done:
                     break
-                    opponent_obs = env.swap_state(player=n)
-                opponent_action = Q(opponent_obs).data.max(1)
-                _, new_reward, new_done, _ = env.step(opponent_action, player=n)
-                reward -= new_reward
+                # Swap observed perspective
+                opponent_obs = env.swap_state(player=env.player)[:, :, :2]
+
+                # Align obs shape to model input
+                opponent_input_to_dqn = torch.from_numpy(opponent_obs.transpose(2, 0, 1)).type(dtype).unsqueeze(0)
+
+                # Choose action according to model
+                with torch.no_grad():
+                    opponent_action = Q(opponent_input_to_dqn).data.max(dim=1)[1].cpu().numpy()
+
+                # perform env step according to action
+                new_obs, new_reward, new_done, _ = env.step(opponent_action, player=env.player)
+
+                # Aggregate information
+                #reward -= new_reward
+                reward -= new_reward if new_reward >= 0 else -0.01  # Do not learn from opponent stupidity
                 done = new_done
+                obs = new_obs
+
+        #if plays % 1000 == 0:
+        #    plot_obs(obs, 'Greedy {}' .format(done))
 
         # Store data needed for the curr step
-        replay_buffer.store_effect(index_obs_stored, action , reward, done)
+        if store_step:
+            replay_buffer.store_effect(index_obs_stored, action, reward, done)
+        store_step = False
 
-        # If gave done, start new one
-        if (done):
-            last_obs = env.reset()
+        # If done, start new game
+        if done:
+            # Store data history
+            if len(reward_history) >= 1000:
+                reward_history[plays % 1000] = reward
+                turn_history[plays % 1000] = env.turn
+            else:
+                reward_history.append(reward)
+                turn_history.append(env.turn)
+
+            # Restart game
+            last_obs, _ = env.reset(random.choice(range(2)))
+            done = False
+            reward = 0
+            plays += 1
         else:
             last_obs = obs
 
@@ -206,39 +226,13 @@ def dqn_learing(
         # reset if done was true), and last_obs should point to the new latest
         # observation
 
-        ### 3. Perform experience replay and train the network.
-        # Note that this is only done if the replay buffer contains enough samples
-        # for us to learn something useful -- until then, the model will not be
-        # initialized and random actions should be taken
-
+        # Perform experience replay and train the network
         if (t > learning_starts and
                 t % learning_freq == 0 and
                 replay_buffer.can_sample(batch_size)):
-            # Here, you should perform training. Training consists of four steps:
-            # 3.a: use the replay buffer to sample a batch of transitions (see the
-            # replay buffer code for function definition, each batch that you sample
-            # should consist of current observations, current actions, rewards,
-            # next observations, and done indicator).
-            # Note: Move the variables to the GPU if avialable
-            # 3.b: fill in your own code to compute the Bellman error. This requires
-            # evaluating the current and next Q-values and constructing the corresponding error.
-            # Note: don't forget to clip the error between [-1,1], multiply is by -1 (since pytorch minimizes) and
-            #       maskout post terminal status Q-values (see ReplayBuffer code).
-            # 3.c: train the model. To do this, use the bellman error you calculated perviously.
-            # Pytorch will differentiate this error for you, to backward the error use the following API:
-            #       current.backward(d_error.data.unsqueeze(1))
-            # Where "current" is the variable holding current Q Values and d_error is the clipped bellman error.
-            # Your code should produce one scalar-valued tensor.
-            # Note: don't forget to call optimizer.zero_grad() before the backward call and
-            #       optimizer.step() after the backward call.
-            # 3.d: periodically update the target network by loading the current Q network weights into the
-            #      target_Q network. see state_dict() and load_state_dict() methods.
-            #      you should update every target_update_freq steps, and you may find the
-            #      variable num_param_updates useful for this (it was initialized to 0)
-            #####
 
+            # Collect experience batch
             obs_batch, act_batch, rew_batch, next_obs_batch, done_mask = replay_buffer.sample(batch_size)
-
 
             obs_batch = Variable(torch.from_numpy(obs_batch).type(dtype))
             act_batch = Variable(torch.from_numpy(act_batch)).type(torch.LongTensor).view(-1,1)
@@ -252,45 +246,157 @@ def dqn_learing(
             # Calculate Q values for chosen action
             current_Q_values = Q(obs_batch).gather(1, act_batch).squeeze(1)
 
-            # Get target Q values
-            next_Q_max_unmask = target_Q(next_obs_batch).max(1).detach()[0]
-            next_Q_masked = next_Q_max_unmask * (1 - done_mask)
-            target_Q_values = rew_batch + (gamma * next_Q_masked)
+            # Calculate best action for next state
+            with torch.no_grad():
+                next_act_batch = Q(next_obs_batch).max(dim=1)[1].detach().view(-1,1)
 
-            d_error = -1.0 * (target_Q_values - current_Q_values)
+            # Extimate next step Q values
+            with torch.no_grad():
+                next_Q_max_unmasked = target_Q(next_obs_batch).gather(1, next_act_batch).detach().squeeze(1)
 
+            # mask final steps
+            next_Q_max_masked = next_Q_max_unmasked * (1 - done_mask)
+
+            # Estimate Q values according to Bellman equation
+            target_Q_values = rew_batch + (gamma * next_Q_max_masked)
+
+            # Compute difference between current estimation and next step estimation
+            d_error = (-1.0 * (target_Q_values - current_Q_values)).clamp(-1, 1)  # Clip error for stability
+
+            # Update Q network
             optimizer.zero_grad()
             current_Q_values.backward(d_error.data)
+            torch.nn.utils.clip_grad_value_(Q.parameters(), 1)  # Clip gradients for stability
             optimizer.step()  # Does the update
 
-            #update target_Q
+            # Update target Q network and validate benchmarks
             num_param_updates += 1
+            state_dict.append(Q.state_dict())
+            target_state_dict = state_dict.pop(0)
+            if num_param_updates > len(state_dict):
+                epoch += 1
+                # Update target_Q network
+                target_Q.load_state_dict(target_state_dict)
 
-            #update the target network from Q
-            if num_param_updates % target_update_freq == 0:
-                target_Q.load_state_dict(Q.state_dict())
+                # Evaluate model on benchmarks
+                if epoch % log_freq == 0:
+                    # Report reward and turn history
+                    c = Counter(reward_history)
+                    print('EPOCH {} T {} PLAYS {}'.format(epoch, t, plays))
+                    print('WIN {} # LOSE {} # MYBAD {} # HISBAD {} # TIE {}'
+                          .format(c[1] / len(reward_history),
+                                  c[-1] / len(reward_history),
+                                  c[-1.01] / len(reward_history),
+                                  c[0.01] / len(reward_history),
+                                  c[0] / len(reward_history)), end='')
+                    Statistic['TURNS_RATE'].append(np.mean(turn_history))
+                    print(' ##### AVG LENGTH {}' .format(Statistic['TURNS_RATE'][-1]))
 
-"""
-        ### 4. Log progress and keep track of statistics
-        episode_rewards = get_wrapper_by_name(env, "Monitor").get_episode_rewards()
-        if len(episode_rewards) > 0:
-            mean_episode_reward = np.mean(episode_rewards[-100:])
-        if len(episode_rewards) > 100:
-            best_mean_episode_reward = max(best_mean_episode_reward, mean_episode_reward)
 
-        Statistic["mean_episode_rewards"].append(mean_episode_reward)
-        Statistic["best_mean_episode_rewards"].append(best_mean_episode_reward)
+                    # Evaluate model on critical actions (validation set)
+                    if validation_data is not None:
+                        with torch.no_grad():
+                            val_actions = Q(validation_data[:, :2, :, :])
+                        Statistic['ERROR_RATE'].append(evaluate(val_actions, validation_labels))
+                        print('ERROR RATE {}'.format(Statistic['ERROR_RATE'][-1]))
 
-        if t % LOG_EVERY_N_STEPS == 0 and t > learning_starts:
-            print("Timestep %d" % (t,))
-            print("mean reward (100 episodes) %f" % mean_episode_reward)
-            print("best mean reward %f" % best_mean_episode_reward)
-            print("episodes %d" % len(episode_rewards))
-            print("exploration %f" % exploration.value(t))
-            sys.stdout.flush()
+                    # Evaluate model on minimax opponent
+                    side_game = Game()
+                    turns = [0] * 2
+                    scores = [0] * 2
 
-            # Dump statistics to pickle
-            with open('statistics.pkl', 'wb') as f:
-                pickle.dump(Statistic, f)
-                print("Saved to %s" % 'statistics.pkl')
-"""
+                    for i, depth in enumerate([1, 2, 4]):
+                        score = [0] * 3
+                        bad_moves = 0
+                        print('MINIMAX # DEPTH {} # ' .format(depth), end='')
+                        for p in range(2):
+                            new_score, bad_move, turn = playGame(side_game, Q, depth, p % 2)
+                            score[0] += new_score > 0
+                            score[1] += new_score == 0
+                            score[2] += new_score < 0
+                            bad_moves += bad_move
+                            turns[p] = turn
+                            scores[p] = new_score
+
+                        stats = score + [bad_moves, np.mean(turns)]
+                        Statistic['MINIMAX_{}'.format(depth)].append(stats)
+                        print('SCORE {}:{}:{} # BAD_MOVES {} $$$ {}:{} {}:{}' .format(score[0], score[1], score[2], bad_moves, turns[0], scores[0], turns[1], scores[1]))
+
+                    # Save model params
+                    if validation_data is not None and Statistic['ERROR_RATE'][-1] < min_error_rate:
+                        model_save_filename = save_path + 'model_min_error_rate'
+                        model_save_path = model_save_filename + '.pth.tar'
+                        save_model(Q, model_save_path)
+                        min_error_rate = Statistic['ERROR_RATE'][-1]
+
+                    wins = Statistic['MINIMAX_1'][-1][0] + Statistic['MINIMAX_2'][-1][0] + Statistic['MINIMAX_4'][-1][0] # + Statistic['MINIMAX_6'][-1][0]
+                    if wins > most_wins or \
+                            wins == most_wins and Statistic['ERROR_RATE'][-1] < min_error_rate_wins:
+                        model_save_filename = save_path + 'model_max_wins_{}'.format(wins)
+                        model_save_path = model_save_filename + '.pth.tar'
+                        save_model(Q, model_save_path)
+                        most_wins = wins
+                        min_error_rate_wins = Statistic['ERROR_RATE'][-1]
+
+                    if Statistic['MINIMAX_4'][-1][0] > most_wins_minimax4 or \
+                            Statistic['MINIMAX_4'][-1][0] == most_wins_minimax4 and wins > most_wins_with_minimax4 or \
+                            Statistic['MINIMAX_4'][-1][0] == most_wins_minimax4 and wins == most_wins_with_minimax4 and Statistic['ERROR_RATE'][-1] < min_error_rate_minimax4:
+                        model_save_filename = save_path + 'model_minimax4'
+                        model_save_path = model_save_filename + '.pth.tar'
+                        save_model(Q, model_save_path)
+                        most_wins_minimax4 = Statistic['MINIMAX_4'][-1][0]
+                        most_wins_with_minimax4 = wins
+                        min_error_rate_minimax4 = Statistic['ERROR_RATE'][-1]
+
+                    print('---------------------------------------')
+                    tm = time.localtime()
+                    dt = (time.perf_counter() - t0_time) / 60
+                    eta = round(dt * (learning_ends - t) / (t - t0))
+                    eta_min = eta % 60
+                    eta_hour = (eta // 60) % 24
+                    eta_day = (eta // 60) // 24
+                    print('TIME: {:02d}:{:02d}' .format(tm.tm_hour, tm.tm_min), end='')
+                    print(' ### ETA: {}::{}:{}' .format(eta_day, eta_hour, eta_min))
+                    t0_time = time.perf_counter()
+                    t0 = t
+
+    # Save last model
+    model_save_filename = save_path + 'model_last'
+    model_save_path = model_save_filename + '.pth.tar'
+    save_model(Q, model_save_path)
+
+    # Dump statistics to pickle
+    with open(save_path + 'statistics.pkl', 'wb') as f:
+        pickle.dump(Statistic, f)
+
+    # Return trained model and stats
+    return Q, Statistic
+
+
+def playGame(side_game, model, depth, player=None):
+    if player==None:
+        player = random.randrange(2)
+    obs, _ = side_game.reset(player)
+    done = False
+
+    bad_move = 0
+
+    while not done:
+        if side_game.player == 0:
+            input_to_dqn = torch.from_numpy(obs.transpose(2,0,1)).type(dtype).unsqueeze(0)
+            action = model(input_to_dqn).data.max(dim=1)[1].cpu().numpy()
+
+            obs, reward, done, _ = side_game.step(action)
+
+            if reward < 0:
+                bad_move = 1
+            if done:
+                return reward, bad_move, side_game.turn
+        else:
+            state = side_game.swap_state(player=1)
+            action, _, _ = alphabeta(state, depth, float('inf'))
+
+            obs, reward, done, _ = side_game.step(action, player=1)
+
+            if done:
+                return -reward, 0, side_game.turn
