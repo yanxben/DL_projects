@@ -10,12 +10,10 @@ import torch.optim as optim
 import torch.nn as nn
 from torch.autograd import Variable
 
-from model import DQN_FCN, DQN_FCN_WIDE
-from game_utils import Game, check_final_step
-from plot_utils import plot_state
-#from dqn_train import OptimizerSpec, dqn_learing
-#from utils.gym import get_env, get_wrapper_by_name
-#from utils.schedule import LinearSchedule
+from model import DQN_FCN, DQN_FCN_WIDE, DQN_LINEAR
+from utils_game import Game, _check_final_step
+from utils_plot import plot_state
+from utils_data import load_end_game_data
 
 
 DATA_SIZE = 100000
@@ -23,7 +21,7 @@ TRAIN_SIZE = int(0.7 * DATA_SIZE)
 BOARD_W, BOARD_H = 7, 6
 lr = 1e-4
 batch_size = 50
-epochs = 10
+epochs = 1
 
 USE_CUDA = torch.cuda.is_available()
 if USE_CUDA:
@@ -38,8 +36,13 @@ else:
 
 def main():
 
-    # Get dataset
+    # Define model
+    print("Creating model")
+    model = DQN_FCN().cuda()
+    optimizer = optim.Adam(model.parameters(), lr=lr)
+    criterion = nn.MSELoss()
 
+    # Get dataset
     if False:
         print("Creating data...")
         game = Game()
@@ -52,7 +55,7 @@ def main():
             win_actions, lose_actions = [0] * BOARD_W, [0] * BOARD_W
             while not (any(win_actions) or any(lose_actions)):
                 state, _, _ = game.rand_state()
-                win_actions, lose_actions = check_final_step(state)
+                win_actions, lose_actions = _check_final_step(state)
 
             if any(win_actions) or any(lose_actions):
                 data[n, :, :, :] = state.transpose([2, 0, 1])
@@ -64,26 +67,10 @@ def main():
                     labels[n, :] = lose_actions
     else:
         print("Loading data...")
-        print('-labels-')
-        #labels_txt = np.loadtxt(os.path.join(os.getcwd(), 'data\\supervised_images\\labels.csv'), delimiter=',')
-        labels_df = pd.read_csv('./data/supervised_images/labels_df.csv')
-        labels_txt = labels_df.values
-        labels = labels_txt[:DATA_SIZE, 1:]
-        print('-win_labels-')
-        #win_labels_txt = np.loadtxt(os.path.join(os.getcwd(), 'data\\supervised_images\\win_labels.csv'), delimiter=',')
-        win_labels_df = pd.read_csv('./data/supervised_images/win_labels_df.csv')
-        win_labels_txt = win_labels_df.values
-        win_labels = win_labels_txt[:DATA_SIZE, 1:]
-        print('-lose_labels-')
-        #lose_labels_txt = np.loadtxt(os.path.join(os.getcwd(), 'data\\supervised_images\\lose_labels.csv'), delimiter=',')
-        lose_labels_df = pd.read_csv('./data/supervised_images/lose_labels_df.csv')
-        lose_labels_txt = lose_labels_df.values
-        lose_labels = lose_labels_txt[:DATA_SIZE, 1:]
-        print('-data-')
-        #data_txt = np.loadtxt(os.path.join(os.getcwd(), 'data\\supervised_images\\images.csv'), delimiter=',')
-        data_df = pd.read_csv('./data/supervised_images/images_df.csv')
-        data_txt = data_df.values
-        data = data_txt[:DATA_SIZE, 1:].reshape([DATA_SIZE, BOARD_H, BOARD_W, 3]).transpose([0, 3, 1, 2])
+        # Temporary swap untila recollect data
+        #data, labels, win_labels, lose_labels = load_end_game_data(DATA_SIZE)
+        data, labels, lose_labels, win_labels = load_end_game_data(DATA_SIZE)
+
 
     plt.figure()
     for i in range(5):
@@ -102,12 +89,6 @@ def main():
     train_labels = labels[:TRAIN_SIZE, :]
     val_labels = labels[TRAIN_SIZE:, :]
 
-    # Define model
-    print("Creating model")
-    model = DQN_FCN_WIDE().cuda()
-    optimizer = optim.Adam(model.parameters(), lr=lr)
-    criterion = nn.MSELoss()
-
     # Train
     learning_curve = train(model, optimizer, criterion, train_data, train_labels, val_data, val_labels)
     #plot_learning_curve(learning_curve)
@@ -121,7 +102,7 @@ def main():
         for i in range(5):
             for j in range(5):
                 plt.subplot(5, 5, i * 5 + j + 1)
-                plot_state(val_data[i*5 + j, :, :, :].transpose([1,2,0]), action=actions[i*5+j])
+                plot_state(val_data[i*5 + j, :, :, :].transpose([1,2,0]), win_actions=val_win_labels[i*5+j, :], lose_actions=val_lose_labels[i*5+j, :], action=actions[i*5+j])
 
     os.getcwd()
     plt.show()
