@@ -15,7 +15,7 @@ import pandas as pd
 #from train_utils import load_model
 #from skimage.transform import rescale
 
-from game_utils import Game, check_final_step
+from utils_game import Game, check_final_step
 
 data_dir = os.path.join(os.getcwd(), 'data')
 
