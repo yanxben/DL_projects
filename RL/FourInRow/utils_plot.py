@@ -152,6 +152,7 @@ def plot_stats(stats, path='./', prefix=''):
     plt.grid()
     plt.xlabel('EPOCHS')
     plt.ylabel('RATE')
+    plt.ylim((0, 2))
     plt.title('AVERAGE WINS AGAINST MINIMAX')
     plt.legend(['MINIMAX 1', 'MINIMAX 2', 'MINIMAX 4'])  #, 'MINIMAX 6'])
 
@@ -166,6 +167,7 @@ def plot_stats(stats, path='./', prefix=''):
     plt.grid()
     plt.xlabel('EPOCHS')
     plt.ylabel('RATE')
+    plt.ylim((0, 2))
     plt.title('AVERAGE LOSSES AGAINST MINIMAX')
     plt.legend(['MINIMAX 1', 'MINIMAX 2', 'MINIMAX 4'])  #, 'MINIMAX 6'])
 
@@ -180,6 +182,7 @@ def plot_stats(stats, path='./', prefix=''):
     plt.grid()
     plt.xlabel('EPOCHS')
     plt.ylabel('RATE')
+    plt.ylim((0, 2))
     plt.title('AVERAGE BAD MOVES AGAINST MINIMAX')
     plt.legend(['MINIMAX 1', 'MINIMAX 2', 'MINIMAX 4'])  #, 'MINIMAX 6'])
 
@@ -194,6 +197,7 @@ def plot_stats(stats, path='./', prefix=''):
     plt.grid()
     plt.xlabel('EPOCHS')
     plt.ylabel('RATE')
+    plt.ylim((0, 42))
     plt.title('AVERAGE TURNS AGAINST MINIMAX')
     plt.legend(['MINIMAX 1', 'MINIMAX 2', 'MINIMAX 4'])  #, 'MINIMAX 6'])
 
@@ -206,7 +210,7 @@ def plot_stats(stats, path='./', prefix=''):
 if __name__ == "__main__":
     import pickle
 
-    with open('./checkpoints_5_01/Statistics.pkl', 'rb') as f:
+    with open('./checkpoints_9_001/Statistics.pkl', 'rb') as f:
         stats = pickle.load(f)
 
-    plot_stats(stats, path='./', prefix='5_01_')
+    plot_stats(stats, path='./', prefix='9_001_')
