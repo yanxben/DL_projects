@@ -12,19 +12,37 @@ from utils_schedule import LinearSchedule
 from utils_plot import plot_stats, plot_state
 from play import play_game
 
-PREFIX = '5_01_symmetry'
-BATCH_SIZE = 64
-GAMMA = 0.99
 REPLAY_BUFFER_SIZE = 100000
 LEARNING_STARTS = 100000
 LEARNING_ENDS = 10000000
+GAMMA = 0.99
 LEARNING_FREQ = 5
 TARGET_UPDATE_FREQ = 5
-LOG_FREQ = 1000
-LEARNING_RATE = 1e-5
+LOG_FREQ = 4000
+BATCH_SIZE = 64
+LEARNING_RATE = 2.5*1e-6
+LR_a = 2.5
+LR_b = 6
+LEARNING_RATE = LR_a * (10 ** -LR_b)
 ALPHA = 0.95
 EPS = 0.1
+EPS_END = 500000
+SYMMETRY = False,
+ERROR_CLIP = True,
+GRAD_CLIP = True
 
+# Construct prefix
+PREFIX = '{}_{}_lr_{}e{}'.format(int(EPS_END / 1000000), EPS, LR_a, LR_b)
+if SYMMETRY:
+    PREFIX += '_symmetry'
+if ERROR_CLIP:
+    PREFIX += '_ec'
+if ERROR_CLIP:
+    PREFIX += '_gc'
+
+PREFIX = PREFIX.replace('.', '')
+
+# Look for GPU
 USE_CUDA = torch.cuda.is_available()
 dtype = torch.cuda.FloatTensor if torch.cuda.is_available() else torch.FloatTensor
 
@@ -38,7 +56,7 @@ def train_model(env, validation_data=None, validation_labels=None):
     )
 
     # Schedule exploration parameter
-    exploration = LinearSchedule(5000000, EPS)
+    exploration = LinearSchedule(EPS_END, EPS)
 
     # Construct an epsilon greedy policy with given exploration schedule
     def epsilon_greedy_policy(model, obs, t):
@@ -68,6 +86,9 @@ def train_model(env, validation_data=None, validation_labels=None):
         ALPHA {} \n \
         EPS {}".format(PREFIX, BATCH_SIZE, GAMMA, REPLAY_BUFFER_SIZE, LEARNING_STARTS, LEARNING_FREQ, TARGET_UPDATE_FREQ, LOG_FREQ, LEARNING_RATE, ALPHA, EPS))
 
+    # Save configurations to txt file
+    # TODO
+
     save_path = './model_{}/'.format(PREFIX)
     if not os.path.isdir(save_path):
         os.mkdir(save_path)
@@ -89,7 +110,9 @@ def train_model(env, validation_data=None, validation_labels=None):
         validation_data=validation_data,
         validation_labels=validation_labels,
         save_path=save_path,
-        symmetry=True
+        symmetry=SYMMETRY,
+        error_clip=ERROR_CLIP,
+        grad_clip=GRAD_CLIP
     )
 
     # Plot and save stats
