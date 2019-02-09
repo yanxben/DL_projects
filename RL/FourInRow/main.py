@@ -1,6 +1,5 @@
-import random
+import os, random
 
-import gym
 import torch
 import torch.optim as optim
 
@@ -11,12 +10,13 @@ from utils_game import Game
 from utils_data import load_end_game_data
 from utils_schedule import LinearSchedule
 from utils_plot import plot_stats, plot_state
+from play import play_game
 
-
+PREFIX = '5_01_symmetry'
 BATCH_SIZE = 64
 GAMMA = 0.99
 REPLAY_BUFFER_SIZE = 100000
-LEARNING_STARTS = 50000
+LEARNING_STARTS = 100000
 LEARNING_ENDS = 10000000
 LEARNING_FREQ = 5
 TARGET_UPDATE_FREQ = 5
@@ -56,6 +56,7 @@ def train_model(env, validation_data=None, validation_labels=None):
         return t > LEARNING_ENDS
 
     print(" \n \
+        PREFIX {} \n \
         BATCH_SIZE {} \n \
         GAMMA {} \n \
         REPLAY_BUFFER_SIZE {} \n \
@@ -65,9 +66,11 @@ def train_model(env, validation_data=None, validation_labels=None):
         LOG_FREQ {} \n \
         LEARNING_RATE {} \n \
         ALPHA {} \n \
-        EPS {}".format(BATCH_SIZE, GAMMA, REPLAY_BUFFER_SIZE, LEARNING_STARTS, LEARNING_FREQ, TARGET_UPDATE_FREQ, LOG_FREQ, LEARNING_RATE, ALPHA, EPS))
+        EPS {}".format(PREFIX, BATCH_SIZE, GAMMA, REPLAY_BUFFER_SIZE, LEARNING_STARTS, LEARNING_FREQ, TARGET_UPDATE_FREQ, LOG_FREQ, LEARNING_RATE, ALPHA, EPS))
 
-    prefix = '5_01'
+    save_path = './model_{}/'.format(PREFIX)
+    if not os.path.isdir(save_path):
+        os.mkdir(save_path)
 
     Q, Statistic = DQNLearning(
         env=env,
@@ -85,62 +88,15 @@ def train_model(env, validation_data=None, validation_labels=None):
         log_freq=LOG_FREQ,
         validation_data=validation_data,
         validation_labels=validation_labels,
-        save_path='./checkpoints_{}/'.fomat(prefix)
+        save_path=save_path,
+        symmetry=True
     )
 
     # Plot and save stats
-    plot_stats(Statistic, prefix=prefix+'_')
+    plot_stats(Statistic, path=save_path, prefix=PREFIX+'_')
 
-    # Play game
-    import matplotlib.pyplot as plt
-    plt.ion()
-    plt.figure()
-    flag = 1
-    while flag:
-        flag = 0
-        env.reset(random.randint(0,1))
-        done = False
-        win = False
-        lose = False
-        draw = False
-        while not done:
-            plot_state(env.state, 'Game Turn {}'.format(env.turn))
-            plt.show()
-            plt.pause(0.01)
-
-            if env.player == 0:
-                # Get player action
-                action = int(input("What is your move? (Choose from 0 to {})".format(env.BOARD_W-1)))
-                obs, reward, done, _ = env.step(action)
-                if done:
-                    if reward > 0:
-                        win = True
-                    elif reward < 0:
-                        lose = True
-                    else:
-                        draw = True
-            else:
-                # Get opponent action
-                opponent_obs = env.swap_state(player=1)[:, :, :2]
-                opponent_input_to_dqn = torch.from_numpy(opponent_obs.transpose(2, 0, 1)).type(dtype).unsqueeze(0)
-                with torch.no_grad():
-                    action = Q(opponent_input_to_dqn).data.max(dim=1)[1].cpu().numpy()
-                obs, reward, done, _ = env.step(action)
-                if done:
-                    if reward > 0:
-                        lose = True
-                    elif reward < 0:
-                        win = True
-                    else:
-                        draw = True
-
-        if win:
-            print('YOU WIN')
-        if lose:
-            print('YOU LOSE!')
-        if draw:
-            print('DRAW!')
-        flag = int(input("Play again? (Choose from 0,1)"))
+    # Play Game
+    play_game(env, Q)
 
 
 

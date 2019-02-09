@@ -15,9 +15,8 @@ import torch.autograd as autograd
 
 from utils.replay_buffer import ReplayBuffer
 
-from utils_game import Game
+from utils_game import Game, _valid_action
 from utils_save import save_model
-from utils_plot import plot_obs
 
 from algorithms import minimax, alphabeta
 from train_supervised import evaluate
@@ -43,7 +42,10 @@ Statistic = {
     'ERROR_RATE': [],
     'MINIMAX_1': [],
     'MINIMAX_2': [],
-    'MINIMAX_4': []
+    'MINIMAX_4': [],
+    'MINIMAX_1_MASK': [],
+    'MINIMAX_2_MASK': [],
+    'MINIMAX_4_MASK': [],
 }
 
 
@@ -63,7 +65,10 @@ def DQNLearning(
     log_freq=10,
     validation_data=None,
     validation_labels=None,
-    save_path='./checkpoints/'
+    save_path='./checkpoints/',
+    symmetry=False,
+    error_clip=True,
+    grad_clip=True
 ):
     """Run Deep Q-learning algorithm.
 
@@ -138,6 +143,11 @@ def DQNLearning(
     most_wins_minimax4 = 0
     most_wins_with_minimax4 = 0
     min_error_rate_minimax4 = 1.
+    most_wins_mask = 0
+    min_error_rate_wins_mask = 1.
+    most_wins_minimax4_mask = 0
+    most_wins_with_minimax4_mask = 0
+    min_error_rate_minimax4_mask = 1.
 
     # Initialize environment
     last_obs, _ = env.reset()
@@ -234,6 +244,13 @@ def DQNLearning(
             # Collect experience batch
             obs_batch, act_batch, rew_batch, next_obs_batch, done_mask = replay_buffer.sample(batch_size)
 
+            if symmetry:  # This feature hopefully helps the model to generate by forcing symmetric similarity
+                symm_mask1 = np.random.randint(0, 2, batch_size)
+                symm_mask2 = np.random.randint(0, 2, batch_size)
+                obs_batch[symm_mask1 == 1, :, :, :] = obs_batch[symm_mask1 == 1, :, ::-1, :]
+                act_batch[symm_mask1 == 1] = 6 - act_batch[symm_mask1 == 1]
+                next_obs_batch[symm_mask2 == 1, :, :, :] = next_obs_batch[symm_mask2 == 1, :, ::-1, :]
+
             obs_batch = Variable(torch.from_numpy(obs_batch).type(dtype))
             act_batch = Variable(torch.from_numpy(act_batch)).type(torch.LongTensor).view(-1,1)
             rew_batch = Variable(torch.from_numpy(rew_batch).type(dtype))
@@ -246,12 +263,10 @@ def DQNLearning(
             # Calculate Q values for chosen action
             current_Q_values = Q(obs_batch).gather(1, act_batch).squeeze(1)
 
-            # Calculate best action for next state
+            # Calculate best action for next state (according to Q)
+            # Estimate next step Q values (according to target_Q)
             with torch.no_grad():
                 next_act_batch = Q(next_obs_batch).max(dim=1)[1].detach().view(-1,1)
-
-            # Extimate next step Q values
-            with torch.no_grad():
                 next_Q_max_unmasked = target_Q(next_obs_batch).gather(1, next_act_batch).detach().squeeze(1)
 
             # mask final steps
@@ -261,12 +276,15 @@ def DQNLearning(
             target_Q_values = rew_batch + (gamma * next_Q_max_masked)
 
             # Compute difference between current estimation and next step estimation
-            d_error = (-1.0 * (target_Q_values - current_Q_values)).clamp(-1, 1)  # Clip error for stability
+            d_error = -1.0 * (target_Q_values - current_Q_values)
+            if error_clip:
+                d_error = d_error.clamp(-1, 1)  # Clip error for stability
 
             # Update Q network
             optimizer.zero_grad()
             current_Q_values.backward(d_error.data)
-            torch.nn.utils.clip_grad_value_(Q.parameters(), 1)  # Clip gradients for stability
+            if grad_clip:
+                torch.nn.utils.clip_grad_value_(Q.parameters(), 1)  # Clip gradients for stability
             optimizer.step()  # Does the update
 
             # Update target Q network and validate benchmarks
@@ -304,13 +322,17 @@ def DQNLearning(
                     side_game = Game()
                     turns = [0] * 2
                     scores = [0] * 2
+                    turns_mask = [0] * 2
+                    scores_mask = [0] * 2
 
                     for i, depth in enumerate([1, 2, 4]):
                         score = [0] * 3
                         bad_moves = 0
+                        score_mask = [0] * 3
                         print('MINIMAX # DEPTH {} # ' .format(depth), end='')
+
                         for p in range(2):
-                            new_score, bad_move, turn = playGame(side_game, Q, depth, p % 2)
+                            new_score, bad_move, turn, new_score_mask, turn_mask = playGame(side_game, Q, depth, p % 2, True)
                             score[0] += new_score > 0
                             score[1] += new_score == 0
                             score[2] += new_score < 0
@@ -318,15 +340,31 @@ def DQNLearning(
                             turns[p] = turn
                             scores[p] = new_score
 
+                            score_mask[0] += new_score_mask > 0
+                            score_mask[1] += new_score_mask == 0
+                            score_mask[2] += new_score_mask < 0
+                            turns_mask[p] = turn_mask
+                            scores_mask[p] = new_score_mask
+
                         stats = score + [bad_moves, np.mean(turns)]
+                        stats_mask = score_mask + [0, np.mean(turns_mask)]
                         Statistic['MINIMAX_{}'.format(depth)].append(stats)
-                        print('SCORE {}:{}:{} # BAD_MOVES {} $$$ {}:{} {}:{}' .format(score[0], score[1], score[2], bad_moves, turns[0], scores[0], turns[1], scores[1]))
+                        Statistic['MINIMAX_{}_MASK'.format(depth)].append(stats_mask)
+                        print('SCORE {}:{}:{} # BAD_MOVES {} $$$ {}:{} {}:{}'.format(score[0], score[1], score[2],
+                                                                                     bad_moves, turns[0], scores[0],
+                                                                                     turns[1], scores[1]))
+                        print('MINIMAX # DEPTH {} # '.format(depth), end='')
+                        print('SCORE {}:{}:{} #             $$$ {}:{} {}:{}'.format(score_mask[0], score_mask[1], score_mask[2],
+                                                                                     turns_mask[0], scores_mask[0],
+                                                                                     turns_mask[1], scores_mask[1]))
 
                     # Save model params
                     if validation_data is not None and Statistic['ERROR_RATE'][-1] < min_error_rate:
                         model_save_filename = save_path + 'model_min_error_rate'
                         model_save_path = model_save_filename + '.pth.tar'
-                        save_model(Q, model_save_path)
+                        save_model(Q, model_save_path, optimizer, params={'t': t, 'epoch': epoch,
+                                                        'stats': {key: Statistic[key][-1] for key in
+                                                                  list(Statistic.keys())}})
                         min_error_rate = Statistic['ERROR_RATE'][-1]
 
                     wins = Statistic['MINIMAX_1'][-1][0] + Statistic['MINIMAX_2'][-1][0] + Statistic['MINIMAX_4'][-1][0] # + Statistic['MINIMAX_6'][-1][0]
@@ -334,7 +372,9 @@ def DQNLearning(
                             wins == most_wins and Statistic['ERROR_RATE'][-1] < min_error_rate_wins:
                         model_save_filename = save_path + 'model_max_wins_{}'.format(wins)
                         model_save_path = model_save_filename + '.pth.tar'
-                        save_model(Q, model_save_path)
+                        save_model(Q, model_save_path, optimizer, params={'t': t, 'epoch': epoch,
+                                                        'stats': {key: Statistic[key][-1] for key in
+                                                                  list(Statistic.keys())}})
                         most_wins = wins
                         min_error_rate_wins = Statistic['ERROR_RATE'][-1]
 
@@ -343,10 +383,35 @@ def DQNLearning(
                             Statistic['MINIMAX_4'][-1][0] == most_wins_minimax4 and wins == most_wins_with_minimax4 and Statistic['ERROR_RATE'][-1] < min_error_rate_minimax4:
                         model_save_filename = save_path + 'model_minimax4'
                         model_save_path = model_save_filename + '.pth.tar'
-                        save_model(Q, model_save_path)
+                        save_model(Q, model_save_path, optimizer, params={'t': t, 'epoch': epoch,
+                                                        'stats': {key: Statistic[key][-1] for key in
+                                                                  list(Statistic.keys())}})
                         most_wins_minimax4 = Statistic['MINIMAX_4'][-1][0]
                         most_wins_with_minimax4 = wins
                         min_error_rate_minimax4 = Statistic['ERROR_RATE'][-1]
+
+                    wins_mask = Statistic['MINIMAX_1_MASK'][-1][0] + Statistic['MINIMAX_2_MASK'][-1][0] + Statistic['MINIMAX_4_MASK'][-1][0] # + Statistic['MINIMAX_6_MASK'][-1][0]
+                    if wins_mask > most_wins_mask or \
+                            wins_mask == most_wins_mask and Statistic['ERROR_RATE'][-1] < min_error_rate_wins_mask:
+                        model_save_filename = save_path + 'model_max_wins_{}_mask'.format(wins_mask)
+                        model_save_path = model_save_filename + '.pth.tar'
+                        save_model(Q, model_save_path, optimizer, params={'t': t, 'epoch': epoch,
+                                                        'stats': {key: Statistic[key][-1] for key in
+                                                                  list(Statistic.keys())}})
+                        most_wins_mask = wins_mask
+                        min_error_rate_wins_mask = Statistic['ERROR_RATE'][-1]
+
+                    if Statistic['MINIMAX_4_MASK'][-1][0] > most_wins_minimax4_mask or \
+                            Statistic['MINIMAX_4_MASK'][-1][0] == most_wins_minimax4_mask and wins_mask > most_wins_with_minimax4_mask or \
+                            Statistic['MINIMAX_4_MASK'][-1][0] == most_wins_minimax4_mask and wins_mask == most_wins_with_minimax4_mask and Statistic['ERROR_RATE'][-1] < min_error_rate_minimax4_mask:
+                        model_save_filename = save_path + 'model_minimax4_mask'
+                        model_save_path = model_save_filename + '.pth.tar'
+                        save_model(Q, model_save_path, optimizer, params={'t': t, 'epoch': epoch,
+                                                        'stats': {key: Statistic[key][-1] for key in
+                                                                  list(Statistic.keys())}})
+                        most_wins_minimax4_mask = Statistic['MINIMAX_4_MASK'][-1][0]
+                        most_wins_with_minimax4_mask = wins_mask
+                        min_error_rate_minimax4_mask = Statistic['ERROR_RATE'][-1]
 
                     print('---------------------------------------')
                     tm = time.localtime()
@@ -363,7 +428,9 @@ def DQNLearning(
     # Save last model
     model_save_filename = save_path + 'model_last'
     model_save_path = model_save_filename + '.pth.tar'
-    save_model(Q, model_save_path)
+    save_model(Q, model_save_path, optimizer, params={'t': learning_ends, 'epoch': epoch,
+                                                      'stats': {key: Statistic[key][-1] for key in
+                                                                list(Statistic.keys())}})
 
     # Dump statistics to pickle
     with open(save_path + 'statistics.pkl', 'wb') as f:
@@ -373,25 +440,41 @@ def DQNLearning(
     return Q, Statistic
 
 
-def playGame(side_game, model, depth, player=None):
-    if player==None:
+def playGame(side_game, model, depth, player=None, mask_bad=False):
+    if player is None:
         player = random.randrange(2)
     obs, _ = side_game.reset(player)
     done = False
 
     bad_move = 0
+    if mask_bad:
+        reward_pre_mask = 0
+        turn_pre_mask = 0
 
     while not done:
         if side_game.player == 0:
             input_to_dqn = torch.from_numpy(obs.transpose(2,0,1)).type(dtype).unsqueeze(0)
-            action = model(input_to_dqn).data.max(dim=1)[1].cpu().numpy()
+            action = model(input_to_dqn).data.cpu().numpy()
+            if mask_bad:
+                valid_mask = _valid_action(side_game.state)
+                if not bad_move and not valid_mask[action.argmax(axis=1)]:
+                    bad_move=1
+                    reward_pre_mask = side_game.bad_move_penalty
+                    turn_pre_mask = side_game.turn
 
+                action[0, valid_mask == 0] = np.float('-inf')
+            action = action.argmax(axis=1)
             obs, reward, done, _ = side_game.step(action)
 
             if reward < 0:
                 bad_move = 1
             if done:
-                return reward, bad_move, side_game.turn
+                if not mask_bad:
+                    return reward, bad_move, side_game.turn
+                else:
+                    reward_pre_mask = reward_pre_mask if bad_move else reward
+                    turn_pre_mask = turn_pre_mask if bad_move else side_game.turn
+                    return reward_pre_mask, bad_move, turn_pre_mask, reward, side_game.turn
         else:
             state = side_game.swap_state(player=1)
             action, _, _ = alphabeta(state, depth, float('inf'))
@@ -399,4 +482,9 @@ def playGame(side_game, model, depth, player=None):
             obs, reward, done, _ = side_game.step(action, player=1)
 
             if done:
-                return -reward, 0, side_game.turn
+                if not mask_bad:
+                    return -reward, 0, side_game.turn
+                else:
+                    reward_pre_mask = reward_pre_mask if bad_move else -reward
+                    turn_pre_mask = turn_pre_mask if bad_move else side_game.turn
+                    return reward_pre_mask, bad_move, turn_pre_mask, -reward, side_game.turn

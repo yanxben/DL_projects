@@ -18,5 +18,6 @@ def load_model(model, path, optimizer=None):
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
     params = checkpoint.copy()
     params.pop('model_state_dict')
-    params.pop('optimizer_state_dict')
+    if params.__contains__('optimizer_state_dict'):
+        params.pop('optimizer_state_dict')
     return params

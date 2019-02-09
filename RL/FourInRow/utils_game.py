@@ -16,6 +16,7 @@ class Game:
         self.player = 0
         self.turn = 0
         self.done = 0
+        self.bad_move_penalty = -1.01
 
     def reset(self, player=0): # TODO: allow random player start
         self.state = np.zeros([self.BOARD_H, self.BOARD_W, 3])
@@ -31,7 +32,7 @@ class Game:
 
         if not _valid_action(self.state, col):
             self.done = 1
-            reward = -1.01
+            reward = self.bad_move_penalty
         else:
             action = _get_action(self.state, col)
             self.state[action[0], action[1], self.player] = 1
@@ -63,7 +64,7 @@ class Game:
 
         if not _valid_action(new_state, col):
             done = 1
-            reward = -1.01
+            reward = self.bad_move_penalty
         else:
             action = _get_action(self.state, col)
             new_state[action[0], action[1], player] = 1
@@ -132,7 +133,10 @@ def _swap_state(state):
     swapped_state[:, :, :2] = swapped_state[:, :, 1::-1]
     return swapped_state
 
-def _valid_action(state, col):
+
+def _valid_action(state, col=None):
+    if col is None:
+        return np.max(state[:, :, 2], axis=0)
     return np.max(state[:, col, 2])
 
 

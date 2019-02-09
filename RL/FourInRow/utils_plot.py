@@ -1,9 +1,11 @@
+import pylab
 import numpy as np
 import matplotlib.pyplot as plt
 #import matplotlib.patches as patches
 
 
-def plot_state(state, title=None, win_actions=None, lose_actions=None, action=None):
+def plot_state(state, title=None, win_actions=None, lose_actions=None, action=None, stats=None, stats_symm=None):
+    plt.cla()
     if len(state.shape) == 4:
         state = np.squeeze(state, 0)
 
@@ -35,6 +37,14 @@ def plot_state(state, title=None, win_actions=None, lose_actions=None, action=No
     if action:
         plt.plot([action], [5 - np.argmax(state[:, action, 2])], color='c', marker='o')
 
+    if stats is not None:
+        for col in range(len(stats[0])):
+            plt.text(col - 0.2, 5 - 0.2, '{:.2f}'.format(stats[0][col]), fontsize=12, color='w')
+            plt.text(col - 0.2, 5 + 0.2, '{:.2f}'.format(stats[1][col]), fontsize=12, color='w')
+    if stats_symm is not None:
+        for col in range(len(stats[0])):
+                plt.text(col - 0.2, 4 - 0.2, '{:.2f}'.format(stats_symm[0][col]), fontsize=12, color='w')
+                plt.text(col - 0.2, 4 + 0.2, '{:.2f}'.format(stats_symm[1][col]), fontsize=12, color='w')
 
 def plot_obs(obs, title=None):
     # Plot image
@@ -54,7 +64,7 @@ def plot_obs(obs, title=None):
         plt.title(title)
 
 
-def plot_stats(stats, prefix=''):
+def plot_stats(stats, path='./', prefix=''):
     """
     Statistic = {
         'TURNS_RATE': [],
@@ -89,49 +99,56 @@ def plot_stats(stats, prefix=''):
     plt.ylabel('ERROR RATE')
     plt.title('VALIDATION ERROR')
 
-    plt.savefig(prefix + 'TrainStats.png')
+    pylab.get_current_fig_manager().window.showMaximized()
+    plt.pause(0.01)
+    plt.savefig(path + prefix + 'TrainStats.png')
     plt.close()
 
     # Plot average win-lose rate and number or turns
+    delta=20
+    stride=2
     minimax1_wins = [minimax1_stats[i][0] for i in range(len(minimax1_stats))]
     minimax1_loss = [minimax1_stats[i][2] for i in range(len(minimax1_stats))]
     minimax1_bads = [minimax1_stats[i][3] for i in range(len(minimax1_stats))]
     minimax1_turn = [minimax1_stats[i][4] for i in range(len(minimax1_stats))]
-    minimax1_avg_wins = [sum(minimax1_wins[i:i + 10])/10 for i in range(0, len(minimax1_wins) - 9)]
-    minimax1_avg_loss = [sum(minimax1_loss[i:i + 10])/10 for i in range(0, len(minimax1_loss) - 9)]
-    minimax1_avg_bads = [sum(minimax1_bads[i:i + 10])/10 for i in range(0, len(minimax1_bads) - 9)]
-    minimax1_avg_turn = [sum(minimax1_turn[i:i + 10])/10 for i in range(0, len(minimax1_turn) - 9)]
+    minimax1_avg_wins = [sum(minimax1_wins[i:i + stride*delta:stride])/delta for i in range(0, int(len(minimax1_wins) - stride*delta+1), stride)]
+    minimax1_avg_loss = [sum(minimax1_loss[i:i + stride*delta:stride])/delta for i in range(0, int(len(minimax1_loss) - stride*delta+1), stride)]
+    minimax1_avg_bads = [sum(minimax1_bads[i:i + stride*delta:stride])/delta for i in range(0, int(len(minimax1_bads) - stride*delta+1), stride)]
+    minimax1_avg_turn = [sum(minimax1_turn[i:i + stride*delta:stride])/delta for i in range(0, int(len(minimax1_turn) - stride*delta+1), stride)]
     minimax2_wins = [minimax2_stats[i][0] for i in range(len(minimax2_stats))]
     minimax2_loss = [minimax2_stats[i][2] for i in range(len(minimax2_stats))]
     minimax2_bads = [minimax2_stats[i][3] for i in range(len(minimax2_stats))]
     minimax2_turn = [minimax2_stats[i][4] for i in range(len(minimax2_stats))]
-    minimax2_avg_wins = [sum(minimax2_wins[i:i + 10])/10 for i in range(0, len(minimax2_wins) - 9)]
-    minimax2_avg_loss = [sum(minimax2_loss[i:i + 10])/10 for i in range(0, len(minimax2_loss) - 9)]
-    minimax2_avg_bads = [sum(minimax2_bads[i:i + 10])/10 for i in range(0, len(minimax2_bads) - 9)]
-    minimax2_avg_turn = [sum(minimax2_turn[i:i + 10])/10 for i in range(0, len(minimax2_turn) - 9)]
+    minimax2_avg_wins = [sum(minimax2_wins[i:i + stride*delta:stride])/delta for i in range(0, int(len(minimax2_wins) - stride*delta+1), stride)]
+    minimax2_avg_loss = [sum(minimax2_loss[i:i + stride*delta:stride])/delta for i in range(0, int(len(minimax2_loss) - stride*delta+1), stride)]
+    minimax2_avg_bads = [sum(minimax2_bads[i:i + stride*delta:stride])/delta for i in range(0, int(len(minimax2_bads) - stride*delta+1), stride)]
+    minimax2_avg_turn = [sum(minimax2_turn[i:i + stride*delta:stride])/delta for i in range(0, int(len(minimax2_turn) - stride*delta+1), stride)]
     minimax4_wins = [minimax4_stats[i][0] for i in range(len(minimax4_stats))]
     minimax4_loss = [minimax4_stats[i][2] for i in range(len(minimax4_stats))]
     minimax4_bads = [minimax4_stats[i][3] for i in range(len(minimax4_stats))]
     minimax4_turn = [minimax4_stats[i][4] for i in range(len(minimax4_stats))]
-    minimax4_avg_wins = [sum(minimax4_wins[i:i + 10])/10 for i in range(0, len(minimax4_wins) - 9)]
-    minimax4_avg_loss = [sum(minimax4_loss[i:i + 10])/10 for i in range(0, len(minimax4_loss) - 9)]
-    minimax4_avg_bads = [sum(minimax4_bads[i:i + 10])/10 for i in range(0, len(minimax4_bads) - 9)]
-    minimax4_avg_turn = [sum(minimax4_turn[i:i + 10])/10 for i in range(0, len(minimax4_turn) - 9)]
+    minimax4_avg_wins = [sum(minimax4_wins[i:i + stride*delta:stride])/delta for i in range(0, int(len(minimax4_wins) - stride*delta+1), stride)]
+    minimax4_avg_loss = [sum(minimax4_loss[i:i + stride*delta:stride])/delta for i in range(0, int(len(minimax4_loss) - stride*delta+1), stride)]
+    minimax4_avg_bads = [sum(minimax4_bads[i:i + stride*delta:stride])/delta for i in range(0, int(len(minimax4_bads) - stride*delta+1), stride)]
+    minimax4_avg_turn = [sum(minimax4_turn[i:i + stride*delta:stride])/delta for i in range(0, int(len(minimax4_turn) - stride*delta+1), stride)]
     #minimax6_wins = [minimax6_stats[i][0] for i in range(len(minimax6_stats))]
     #minimax6_loss = [minimax6_stats[i][2] for i in range(len(minimax6_stats))]
     #minimax6_bads = [minimax6_stats[i][3] for i in range(len(minimax6_stats))]
     #minimax6_turn = [minimax6_stats[i][4] for i in range(len(minimax6_stats))]
-    #minimax6_avg_wins = [sum(minimax6_wins[i:i + 10])/10 for i in range(0, len(minimax6_wins) - 9)]
-    #minimax6_avg_loss = [sum(minimax6_loss[i:i + 10])/10 for i in range(0, len(minimax6_loss) - 9)]
-    #minimax6_avg_bads = [sum(minimax6_bads[i:i + 10])/10 for i in range(0, len(minimax6_bads) - 9)]
-    #minimax6_avg_turn = [sum(minimax6_turn[i:i + 10])/10 for i in range(0, len(minimax6_turn) - 9)]
+    #minimax6_avg_wins = [sum(minimax6_wins[i:i + stride*delta:stride])/delta for i in range(0, int(len(minimax6_wins)/stride - delta+1))]
+    #minimax6_avg_loss = [sum(minimax6_loss[i:i + stride*delta:stride])/delta for i in range(0, int(len(minimax6_loss)/stride - delta+1))]
+    #minimax6_avg_bads = [sum(minimax6_bads[i:i + stride*delta:stride])/delta for i in range(0, int(len(minimax6_bads)/stride - delta+1))]
+    #minimax6_avg_turn = [sum(minimax6_turn[i:i + stride*delta:stride])/delta for i in range(0, int(len(minimax6_turn)/stride - delta+1))]
 
     plt.figure()
     plt.subplot(2,2,1)
-    plt.scatter(epochs[9:], minimax1_avg_wins, marker='.')
-    plt.scatter(epochs[9:], minimax2_avg_wins, marker='.')
-    plt.scatter(epochs[9:], minimax4_avg_wins, marker='.')
-    #plt.scatter(epochs[9:], minimax6_avg_wins, marker='.')
+    #plt.scatter(epochs[delta-1::stride], minimax1_avg_wins, marker='.')
+    #plt.scatter(epochs[delta-1::stride], minimax2_avg_wins, marker='.')
+    #plt.scatter(epochs[delta-1::stride], minimax4_avg_wins, marker='.')
+    plt.plot(epochs[stride*delta - 1::stride], minimax1_avg_wins)
+    plt.plot(epochs[stride*delta - 1::stride], minimax2_avg_wins)
+    plt.plot(epochs[stride*delta - 1::stride], minimax4_avg_wins)
+    #plt.scatter(epochs[delta-1::stride], minimax6_avg_wins, marker='.')
     plt.grid()
     plt.xlabel('EPOCHS')
     plt.ylabel('RATE')
@@ -139,10 +156,13 @@ def plot_stats(stats, prefix=''):
     plt.legend(['MINIMAX 1', 'MINIMAX 2', 'MINIMAX 4'])  #, 'MINIMAX 6'])
 
     plt.subplot(2,2,2)
-    plt.scatter(epochs[9:], minimax1_avg_loss, marker='.')
-    plt.scatter(epochs[9:], minimax2_avg_loss, marker='.')
-    plt.scatter(epochs[9:], minimax4_avg_loss, marker='.')
-    #plt.scatter(epochs[9:], minimax6_avg_loss, marker='.')
+    #plt.scatter(epochs[delta-1::stride], minimax1_avg_loss, marker='.')
+    #plt.scatter(epochs[delta-1::stride], minimax2_avg_loss, marker='.')
+    #plt.scatter(epochs[delta-1::stride], minimax4_avg_loss, marker='.')
+    plt.plot(epochs[stride*delta - 1::stride], minimax1_avg_loss)
+    plt.plot(epochs[stride*delta - 1::stride], minimax2_avg_loss)
+    plt.plot(epochs[stride*delta - 1::stride], minimax4_avg_loss)
+    #plt.scatter(epochs[delta-1::stride], minimax6_avg_loss, marker='.')
     plt.grid()
     plt.xlabel('EPOCHS')
     plt.ylabel('RATE')
@@ -150,10 +170,13 @@ def plot_stats(stats, prefix=''):
     plt.legend(['MINIMAX 1', 'MINIMAX 2', 'MINIMAX 4'])  #, 'MINIMAX 6'])
 
     plt.subplot(2, 2, 3)
-    plt.scatter(epochs[9:], minimax1_avg_bads, marker='.')
-    plt.scatter(epochs[9:], minimax2_avg_bads, marker='.')
-    plt.scatter(epochs[9:], minimax4_avg_bads, marker='.')
-    #plt.scatter(epochs[9:], minimax6_avg_bads, marker='.')
+    #plt.scatter(epochs[delta-1::stride], minimax1_avg_bads, marker='.')
+    #plt.scatter(epochs[delta-1::stride], minimax2_avg_bads, marker='.')
+    #plt.scatter(epochs[delta-1::stride], minimax4_avg_bads, marker='.')
+    plt.plot(epochs[stride*delta - 1::stride], minimax1_avg_bads)
+    plt.plot(epochs[stride*delta - 1::stride], minimax2_avg_bads)
+    plt.plot(epochs[stride*delta - 1::stride], minimax4_avg_bads)
+    #plt.scatter(epochs[delta-1::stride], minimax6_avg_bads, marker='.')
     plt.grid()
     plt.xlabel('EPOCHS')
     plt.ylabel('RATE')
@@ -161,16 +184,29 @@ def plot_stats(stats, prefix=''):
     plt.legend(['MINIMAX 1', 'MINIMAX 2', 'MINIMAX 4'])  #, 'MINIMAX 6'])
 
     plt.subplot(2,2,4)
-    plt.scatter(epochs[9:], minimax1_avg_turn, marker='.')
-    plt.scatter(epochs[9:], minimax2_avg_turn, marker='.')
-    plt.scatter(epochs[9:], minimax4_avg_turn, marker='.')
-    #plt.scatter(epochs[9:], minimax6_avg_turn, marker='.')
+    #plt.scatter(epochs[delta-1::stride], minimax1_avg_turn, marker='.')
+    #plt.scatter(epochs[delta-1::stride], minimax2_avg_turn, marker='.')
+    #plt.scatter(epochs[delta-1::stride], minimax4_avg_turn, marker='.')
+    plt.plot(epochs[stride*delta - 1::stride], minimax1_avg_turn)
+    plt.plot(epochs[stride*delta - 1::stride], minimax2_avg_turn)
+    plt.plot(epochs[stride*delta - 1::stride], minimax4_avg_turn)
+    #plt.scatter(epochs[delta-1::stride], minimax6_avg_turn, marker='.')
     plt.grid()
     plt.xlabel('EPOCHS')
     plt.ylabel('RATE')
     plt.title('AVERAGE TURNS AGAINST MINIMAX')
     plt.legend(['MINIMAX 1', 'MINIMAX 2', 'MINIMAX 4'])  #, 'MINIMAX 6'])
 
-    plt.savefig(prefix + 'MiniMaxStats.png')
+    pylab.get_current_fig_manager().window.showMaximized()
+    plt.pause(0.01)
+    plt.savefig(path + prefix + 'MiniMaxStats.png')
     plt.close()
 
+
+if __name__ == "__main__":
+    import pickle
+
+    with open('./checkpoints_5_01/Statistics.pkl', 'rb') as f:
+        stats = pickle.load(f)
+
+    plot_stats(stats, path='./', prefix='5_01_')
