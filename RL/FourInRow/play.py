@@ -23,6 +23,7 @@ def play_game(env, Q):
     flag = 1
     stats = np.zeros([2, 7])
     stats_symm = np.zeros([2, 7])
+    action=None
     while flag:
         obs, _ = env.reset(random.randint(0, 1))
         done = False
@@ -44,7 +45,7 @@ def play_game(env, Q):
             opponent_input_to_dqn = np.flip(opponent_obs.transpose(2, 0, 1), axis=2).copy()
             opponent_input_to_dqn = torch.from_numpy(opponent_input_to_dqn).type(dtype).unsqueeze(0)
             stats_symm[1, :] = np.flip(Q(opponent_input_to_dqn).data.cpu().numpy(), axis=1)
-            plot_state(env.state, 'Game Turn {}'.format(env.turn), stats=stats, stats_symm=stats_symm)
+            plot_state(env.state, 'Game Turn {}'.format(env.turn), action=action, stats=stats, stats_symm=stats_symm)
             plt.show()
             plt.pause(0.01)
 
@@ -74,7 +75,8 @@ def play_game(env, Q):
                     else:
                         draw = True
 
-        plot_state(env.state, 'Game Turn {}'.format(env.turn), stats=stats)
+        plt.subplot(2, 1, 1)
+        plot_state(env.state, 'Game Turn {}'.format(env.turn), action=action)
         plt.show()
         plt.pause(0.01)
         print(action)
@@ -91,8 +93,23 @@ def play_game(env, Q):
 if __name__ == "__main__":
     env = Game()
 
-    Q = DQN_FCN_WIDE()
-    checkpoint_path = './checkpoints_5_01/model_max_wins_5.pth.tar'
-    params = load_model(Q, checkpoint_path)
+    Q1 = DQN_FCN_WIDE()
+    Q2 = DQN_FCN_WIDE()
+    Q3 = DQN_FCN_WIDE()
+    #checkpoint_path = './model_5_01_lr_5e6_symmetry_good_gc/model_max_wins_6_mask.pth.tar'
+    model = 'model_min_error_rate'
+    checkpoint_path1 = './model_5_01_lr_5e6_symmetry_good_ec_gc/' + model + '.pth.tar'
+    checkpoint_path2 = './model_5_01_lr_5e6_symmetry_good_gc/' + model + '.pth.tar'
+    checkpoint_path3 = './model_5_01_lr_5e6_symmetry_good/' + model + '.pth.tar'
+    params = load_model(Q1, checkpoint_path1)
+    print(params)
+    params = load_model(Q2, checkpoint_path2)
+    print(params)
+    params = load_model(Q3, checkpoint_path3)
+    print(params)
 
-    play_game(env, Q)
+    def policy(obs):
+        return (Q1(obs) + Q2(obs) + Q3(obs)) / 3
+
+
+    play_game(env, policy)

@@ -35,7 +35,7 @@ def plot_state(state, title=None, win_actions=None, lose_actions=None, action=No
                 plt.plot([col], [5 - np.argmax(state[:, col, 2])], color='y', marker='.')
 
     if action:
-        plt.plot([action], [5 - np.argmax(state[:, action, 2])], color='c', marker='o')
+        plt.plot([action], [5 - ((np.argmax(state[:, action, 2]) - 1) % 6)], color='c', marker='o')
 
     if stats is not None:
         for col in range(len(stats[0])):
@@ -64,7 +64,7 @@ def plot_obs(obs, title=None):
         plt.title(title)
 
 
-def plot_stats(stats, path='./', prefix=''):
+def plot_stats(stats, path='./', prefix='', delta=10, stride=1):
     """
     Statistic = {
         'TURNS_RATE': [],
@@ -105,8 +105,8 @@ def plot_stats(stats, path='./', prefix=''):
     plt.close()
 
     # Plot average win-lose rate and number or turns
-    delta=20
-    stride=2
+    #delta=20
+    #stride=2
     minimax1_wins = [minimax1_stats[i][0] for i in range(len(minimax1_stats))]
     minimax1_loss = [minimax1_stats[i][2] for i in range(len(minimax1_stats))]
     minimax1_bads = [minimax1_stats[i][3] for i in range(len(minimax1_stats))]
@@ -210,7 +210,7 @@ def plot_stats(stats, path='./', prefix=''):
 if __name__ == "__main__":
     import pickle
 
-    with open('./checkpoints_9_001/Statistics.pkl', 'rb') as f:
+    with open('./model_5_01_lr_5e6_symmetry_good/Statistics.pkl', 'rb') as f:
         stats = pickle.load(f)
 
-    plot_stats(stats, path='./', prefix='9_001_')
+    plot_stats(stats, path='./', prefix='model_5_01_lr_5e6_symmetry_good_', delta=10, stride=1)

@@ -15,7 +15,7 @@ import pandas as pd
 #from train_utils import load_model
 #from skimage.transform import rescale
 
-from utils_game import Game, check_final_step
+from utils_game import Game, _check_final_step
 
 data_dir = os.path.join(os.getcwd(), 'data')
 
@@ -35,8 +35,8 @@ def create_images(outdir, DATA_SIZE=100000):
             print('image {}' .format(n))
         win_actions, lose_actions = [0] * BOARD_W, [0] * BOARD_W
         while not (any(win_actions) or any(lose_actions)):
-            state, _, _ = game.rand_state(final=True)
-            win_actions, lose_actions = check_final_step(state)
+            state, _, _ = game.rand_state(max_stage=0, final=True)
+            win_actions, lose_actions = _check_final_step(state)
 
         if any(win_actions) or any(lose_actions):
             data[n, :, :, :] = state
@@ -65,7 +65,7 @@ def create_images(outdir, DATA_SIZE=100000):
 
 
 if __name__ == '__main__':
-    data_path = os.path.join(data_dir, "supervised_images")
+    data_path = os.path.join(data_dir, "supervised_images_2")
     if os.path.isdir(data_path):
         shutil.rmtree(data_path)
 
@@ -74,4 +74,4 @@ if __name__ == '__main__':
 
     print(os.getcwd())
     print(data_path)
-    create_images(data_path)
+    create_images(data_path, 1000)

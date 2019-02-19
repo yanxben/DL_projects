@@ -12,32 +12,31 @@ from utils_schedule import LinearSchedule
 from utils_plot import plot_stats, plot_state
 from play import play_game
 
-REPLAY_BUFFER_SIZE = 100000
-LEARNING_STARTS = 100000
-LEARNING_ENDS = 10000000
+REPLAY_BUFFER_SIZE = 100
+LEARNING_STARTS = 100
+LEARNING_ENDS = 10000
 GAMMA = 0.99
 LEARNING_FREQ = 5
 TARGET_UPDATE_FREQ = 5
-LOG_FREQ = 4000
+LOG_FREQ = 4
 BATCH_SIZE = 64
-LEARNING_RATE = 2.5*1e-6
-LR_a = 2.5
+LR_a = 5
 LR_b = 6
 LEARNING_RATE = LR_a * (10 ** -LR_b)
 ALPHA = 0.95
 EPS = 0.1
-EPS_END = 500000
-SYMMETRY = False,
-ERROR_CLIP = True,
-GRAD_CLIP = True
+EPS_END = 5000000
+SYMMETRY = True
+ERROR_CLIP = False
+GRAD_CLIP = False
 
 # Construct prefix
-PREFIX = '{}_{}_lr_{}e{}'.format(int(EPS_END / 1000000), EPS, LR_a, LR_b)
+PREFIX = 'test_{}_{}_lr_{}e{}'.format(int(EPS_END / 1000000), EPS, LR_a, LR_b)
 if SYMMETRY:
-    PREFIX += '_symmetry'
+    PREFIX += '_symmetry_good'
 if ERROR_CLIP:
     PREFIX += '_ec'
-if ERROR_CLIP:
+if GRAD_CLIP:
     PREFIX += '_gc'
 
 PREFIX = PREFIX.replace('.', '')
@@ -93,7 +92,7 @@ def train_model(env, validation_data=None, validation_labels=None):
     if not os.path.isdir(save_path):
         os.mkdir(save_path)
 
-    Q, Statistic = DQNLearning(
+    Q, statistics = DQNLearning(
         env=env,
         q_func=DQN_FCN_WIDE,
         optimizer_spec=optimizer_spec,
@@ -116,11 +115,7 @@ def train_model(env, validation_data=None, validation_labels=None):
     )
 
     # Plot and save stats
-    plot_stats(Statistic, path=save_path, prefix=PREFIX+'_')
-
-    # Play Game
-    play_game(env, Q)
-
+    plot_stats(statistics, path=save_path, prefix=PREFIX+'_')
 
 
 if __name__ == '__main__':

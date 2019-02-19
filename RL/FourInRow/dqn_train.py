@@ -37,17 +37,6 @@ class Variable(autograd.Variable):
 """
 OptimizerSpec = namedtuple("OptimizerSpec", ["constructor", "kwargs"])
 
-Statistic = {
-    'TURNS_RATE': [],
-    'ERROR_RATE': [],
-    'MINIMAX_1': [],
-    'MINIMAX_2': [],
-    'MINIMAX_4': [],
-    'MINIMAX_1_MASK': [],
-    'MINIMAX_2_MASK': [],
-    'MINIMAX_4_MASK': [],
-}
-
 
 def DQNLearning(
     env,
@@ -67,8 +56,8 @@ def DQNLearning(
     validation_labels=None,
     save_path='./checkpoints/',
     symmetry=False,
-    error_clip=True,
-    grad_clip=True
+    error_clip=False,
+    grad_clip=False
 ):
     """Run Deep Q-learning algorithm.
 
@@ -131,12 +120,21 @@ def DQNLearning(
     epoch = 0
     plays = 0
     num_param_updates = 0
-    store_step = False
     state_dict = [None] * target_update_freq
     reward_history = []
     turn_history = []
 
     # Checkpoint parameters
+    statistics = {
+        'TURNS_RATE': [],
+        'ERROR_RATE': [],
+        'MINIMAX_1': [],
+        'MINIMAX_2': [],
+        'MINIMAX_4': [],
+        'MINIMAX_1_MASK': [],
+        'MINIMAX_2_MASK': [],
+        'MINIMAX_4_MASK': [],
+    }
     min_error_rate = 1.
     most_wins = 0
     min_error_rate_wins = 1.
@@ -148,12 +146,13 @@ def DQNLearning(
     most_wins_minimax4_mask = 0
     most_wins_with_minimax4_mask = 0
     min_error_rate_minimax4_mask = 1.
+    stats_values = [min_error_rate, most_wins, min_error_rate_wins,
+                    most_wins_minimax4, most_wins_with_minimax4, min_error_rate_minimax4,
+                    most_wins_mask, min_error_rate_wins_mask,
+                    most_wins_minimax4_mask, most_wins_with_minimax4_mask, min_error_rate_minimax4_mask]
 
     # Initialize environment
     last_obs, _ = env.reset()
-    done = False
-    reward = 0
-    players = env.players
 
     validation_data = torch.Tensor(validation_data).type(dtype).cuda()
 
@@ -164,55 +163,7 @@ def DQNLearning(
             break
 
         # Perform env step according to player
-        if players == 1 or env.player == 0:
-            # Store last obs
-            index_obs_stored = replay_buffer.store_frame(last_obs)
-
-            # Get input to dqc
-            input_to_dqn = replay_buffer.encode_recent_observation()
-
-            # Choose action according to play policy
-            action, flag = policy_func(Q, input_to_dqn, t)
-
-            # Perform env step according to action
-            obs, reward, done, _ = env.step(action)
-
-            # Raise flag for store step
-            store_step = True
-
-        #    if plays % 1000 == 0:
-        #        plot_obs(obs, title='{} {}' .format('Random' if flag else 'Greedy', done))
-        # Perform env step according to opponents
-        if players > 1:
-            while env.player != 0:
-                if done:
-                    break
-                # Swap observed perspective
-                opponent_obs = env.swap_state(player=env.player)[:, :, :2]
-
-                # Align obs shape to model input
-                opponent_input_to_dqn = torch.from_numpy(opponent_obs.transpose(2, 0, 1)).type(dtype).unsqueeze(0)
-
-                # Choose action according to model
-                with torch.no_grad():
-                    opponent_action = Q(opponent_input_to_dqn).data.max(dim=1)[1].cpu().numpy()
-
-                # perform env step according to action
-                new_obs, new_reward, new_done, _ = env.step(opponent_action, player=env.player)
-
-                # Aggregate information
-                #reward -= new_reward
-                reward -= new_reward if new_reward >= 0 else -0.01  # Do not learn from opponent stupidity
-                done = new_done
-                obs = new_obs
-
-        #if plays % 1000 == 0:
-        #    plot_obs(obs, 'Greedy {}' .format(done))
-
-        # Store data needed for the curr step
-        if store_step:
-            replay_buffer.store_effect(index_obs_stored, action, reward, done)
-        store_step = False
+        obs, done, reward = explore_step(env, last_obs, Q, Q, policy_func, replay_buffer, t)
 
         # If done, start new game
         if done:
@@ -226,8 +177,6 @@ def DQNLearning(
 
             # Restart game
             last_obs, _ = env.reset(random.choice(range(2)))
-            done = False
-            reward = 0
             plays += 1
         else:
             last_obs = obs
@@ -241,51 +190,7 @@ def DQNLearning(
                 t % learning_freq == 0 and
                 replay_buffer.can_sample(batch_size)):
 
-            # Collect experience batch
-            obs_batch, act_batch, rew_batch, next_obs_batch, done_mask = replay_buffer.sample(batch_size)
-
-            if symmetry:  # This feature hopefully helps the model to generate by forcing symmetric similarity
-                symm_mask1 = np.random.randint(0, 2, batch_size)
-                symm_mask2 = np.random.randint(0, 2, batch_size)
-                obs_batch[symm_mask1 == 1, :, :, :] = obs_batch[symm_mask1 == 1, :, ::-1, :]
-                act_batch[symm_mask1 == 1] = 6 - act_batch[symm_mask1 == 1]
-                next_obs_batch[symm_mask2 == 1, :, :, :] = next_obs_batch[symm_mask2 == 1, :, ::-1, :]
-
-            obs_batch = Variable(torch.from_numpy(obs_batch).type(dtype))
-            act_batch = Variable(torch.from_numpy(act_batch)).type(torch.LongTensor).view(-1,1)
-            rew_batch = Variable(torch.from_numpy(rew_batch).type(dtype))
-            next_obs_batch = Variable(torch.from_numpy(next_obs_batch).type(dtype))
-            done_mask = Variable(torch.from_numpy(done_mask).type(dtype))
-
-            if USE_CUDA:
-                act_batch = act_batch.cuda()
-
-            # Calculate Q values for chosen action
-            current_Q_values = Q(obs_batch).gather(1, act_batch).squeeze(1)
-
-            # Calculate best action for next state (according to Q)
-            # Estimate next step Q values (according to target_Q)
-            with torch.no_grad():
-                next_act_batch = Q(next_obs_batch).max(dim=1)[1].detach().view(-1,1)
-                next_Q_max_unmasked = target_Q(next_obs_batch).gather(1, next_act_batch).detach().squeeze(1)
-
-            # mask final steps
-            next_Q_max_masked = next_Q_max_unmasked * (1 - done_mask)
-
-            # Estimate Q values according to Bellman equation
-            target_Q_values = rew_batch + (gamma * next_Q_max_masked)
-
-            # Compute difference between current estimation and next step estimation
-            d_error = -1.0 * (target_Q_values - current_Q_values)
-            if error_clip:
-                d_error = d_error.clamp(-1, 1)  # Clip error for stability
-
-            # Update Q network
-            optimizer.zero_grad()
-            current_Q_values.backward(d_error.data)
-            if grad_clip:
-                torch.nn.utils.clip_grad_value_(Q.parameters(), 1)  # Clip gradients for stability
-            optimizer.step()  # Does the update
+            train_step(Q, target_Q, optimizer, replay_buffer, batch_size, gamma, symmetry, error_clip, grad_clip)
 
             # Update target Q network and validate benchmarks
             num_param_updates += 1
@@ -307,140 +212,265 @@ def DQNLearning(
                                   c[-1.01] / len(reward_history),
                                   c[0.01] / len(reward_history),
                                   c[0] / len(reward_history)), end='')
-                    Statistic['TURNS_RATE'].append(np.mean(turn_history))
-                    print(' ##### AVG LENGTH {}' .format(Statistic['TURNS_RATE'][-1]))
+                    statistics['TURNS_RATE'].append(np.mean(turn_history))
+                    print(' ##### AVG LENGTH {}' .format(statistics['TURNS_RATE'][-1]))
 
-
-                    # Evaluate model on critical actions (validation set)
-                    if validation_data is not None:
-                        with torch.no_grad():
-                            val_actions = Q(validation_data[:, :2, :, :])
-                        Statistic['ERROR_RATE'].append(evaluate(val_actions, validation_labels))
-                        print('ERROR RATE {}'.format(Statistic['ERROR_RATE'][-1]))
-
-                    # Evaluate model on minimax opponent
-                    side_game = Game()
-                    turns = [0] * 2
-                    scores = [0] * 2
-                    turns_mask = [0] * 2
-                    scores_mask = [0] * 2
-
-                    for i, depth in enumerate([1, 2, 4]):
-                        score = [0] * 3
-                        bad_moves = 0
-                        score_mask = [0] * 3
-                        print('MINIMAX # DEPTH {} # ' .format(depth), end='')
-
-                        for p in range(2):
-                            new_score, bad_move, turn, new_score_mask, turn_mask = playGame(side_game, Q, depth, p % 2, True)
-                            score[0] += new_score > 0
-                            score[1] += new_score == 0
-                            score[2] += new_score < 0
-                            bad_moves += bad_move
-                            turns[p] = turn
-                            scores[p] = new_score
-
-                            score_mask[0] += new_score_mask > 0
-                            score_mask[1] += new_score_mask == 0
-                            score_mask[2] += new_score_mask < 0
-                            turns_mask[p] = turn_mask
-                            scores_mask[p] = new_score_mask
-
-                        stats = score + [bad_moves, np.mean(turns)]
-                        stats_mask = score_mask + [0, np.mean(turns_mask)]
-                        Statistic['MINIMAX_{}'.format(depth)].append(stats)
-                        Statistic['MINIMAX_{}_MASK'.format(depth)].append(stats_mask)
-                        print('SCORE {}:{}:{} # BAD_MOVES {} $$$ {}:{} {}:{}'.format(score[0], score[1], score[2],
-                                                                                     bad_moves, turns[0], scores[0],
-                                                                                     turns[1], scores[1]))
-                        print('MINIMAX # DEPTH {} # '.format(depth), end='')
-                        print('SCORE {}:{}:{} #             $$$ {}:{} {}:{}'.format(score_mask[0], score_mask[1], score_mask[2],
-                                                                                     turns_mask[0], scores_mask[0],
-                                                                                     turns_mask[1], scores_mask[1]))
-
-                    # Save model params
-                    if validation_data is not None and Statistic['ERROR_RATE'][-1] < min_error_rate:
-                        model_save_filename = save_path + 'model_min_error_rate'
-                        model_save_path = model_save_filename + '.pth.tar'
-                        save_model(Q, model_save_path, optimizer, params={'t': t, 'epoch': epoch,
-                                                        'stats': {key: Statistic[key][-1] for key in
-                                                                  list(Statistic.keys())}})
-                        min_error_rate = Statistic['ERROR_RATE'][-1]
-
-                    wins = Statistic['MINIMAX_1'][-1][0] + Statistic['MINIMAX_2'][-1][0] + Statistic['MINIMAX_4'][-1][0] # + Statistic['MINIMAX_6'][-1][0]
-                    if wins > most_wins or \
-                            wins == most_wins and Statistic['ERROR_RATE'][-1] < min_error_rate_wins:
-                        model_save_filename = save_path + 'model_max_wins_{}'.format(wins)
-                        model_save_path = model_save_filename + '.pth.tar'
-                        save_model(Q, model_save_path, optimizer, params={'t': t, 'epoch': epoch,
-                                                        'stats': {key: Statistic[key][-1] for key in
-                                                                  list(Statistic.keys())}})
-                        most_wins = wins
-                        min_error_rate_wins = Statistic['ERROR_RATE'][-1]
-
-                    if Statistic['MINIMAX_4'][-1][0] > most_wins_minimax4 or \
-                            Statistic['MINIMAX_4'][-1][0] == most_wins_minimax4 and wins > most_wins_with_minimax4 or \
-                            Statistic['MINIMAX_4'][-1][0] == most_wins_minimax4 and wins == most_wins_with_minimax4 and Statistic['ERROR_RATE'][-1] < min_error_rate_minimax4:
-                        model_save_filename = save_path + 'model_minimax4'
-                        model_save_path = model_save_filename + '.pth.tar'
-                        save_model(Q, model_save_path, optimizer, params={'t': t, 'epoch': epoch,
-                                                        'stats': {key: Statistic[key][-1] for key in
-                                                                  list(Statistic.keys())}})
-                        most_wins_minimax4 = Statistic['MINIMAX_4'][-1][0]
-                        most_wins_with_minimax4 = wins
-                        min_error_rate_minimax4 = Statistic['ERROR_RATE'][-1]
-
-                    wins_mask = Statistic['MINIMAX_1_MASK'][-1][0] + Statistic['MINIMAX_2_MASK'][-1][0] + Statistic['MINIMAX_4_MASK'][-1][0] # + Statistic['MINIMAX_6_MASK'][-1][0]
-                    if wins_mask > most_wins_mask or \
-                            wins_mask == most_wins_mask and Statistic['ERROR_RATE'][-1] < min_error_rate_wins_mask:
-                        model_save_filename = save_path + 'model_max_wins_{}_mask'.format(wins_mask)
-                        model_save_path = model_save_filename + '.pth.tar'
-                        save_model(Q, model_save_path, optimizer, params={'t': t, 'epoch': epoch,
-                                                        'stats': {key: Statistic[key][-1] for key in
-                                                                  list(Statistic.keys())}})
-                        most_wins_mask = wins_mask
-                        min_error_rate_wins_mask = Statistic['ERROR_RATE'][-1]
-
-                    if Statistic['MINIMAX_4_MASK'][-1][0] > most_wins_minimax4_mask or \
-                            Statistic['MINIMAX_4_MASK'][-1][0] == most_wins_minimax4_mask and wins_mask > most_wins_with_minimax4_mask or \
-                            Statistic['MINIMAX_4_MASK'][-1][0] == most_wins_minimax4_mask and wins_mask == most_wins_with_minimax4_mask and Statistic['ERROR_RATE'][-1] < min_error_rate_minimax4_mask:
-                        model_save_filename = save_path + 'model_minimax4_mask'
-                        model_save_path = model_save_filename + '.pth.tar'
-                        save_model(Q, model_save_path, optimizer, params={'t': t, 'epoch': epoch,
-                                                        'stats': {key: Statistic[key][-1] for key in
-                                                                  list(Statistic.keys())}})
-                        most_wins_minimax4_mask = Statistic['MINIMAX_4_MASK'][-1][0]
-                        most_wins_with_minimax4_mask = wins_mask
-                        min_error_rate_minimax4_mask = Statistic['ERROR_RATE'][-1]
-
-                    print('---------------------------------------')
-                    tm = time.localtime()
-                    dt = (time.perf_counter() - t0_time) / 60
-                    eta = round(dt * (learning_ends - t) / (t - t0))
-                    eta_min = eta % 60
-                    eta_hour = (eta // 60) % 24
-                    eta_day = (eta // 60) // 24
-                    print('TIME: {:02d}:{:02d}' .format(tm.tm_hour, tm.tm_min), end='')
-                    print(' ### ETA: {}::{}:{}' .format(eta_day, eta_hour, eta_min))
-                    t0_time = time.perf_counter()
-                    t0 = t
+                    stats_valus, t0, t0_time = evaluation_step(
+                        Q, optimizer, validation_data, validation_labels,
+                        save_path, statistics,
+                        *stats_values, t, learning_ends, epoch, t0, t0_time
+                    )
 
     # Save last model
     model_save_filename = save_path + 'model_last'
     model_save_path = model_save_filename + '.pth.tar'
     save_model(Q, model_save_path, optimizer, params={'t': learning_ends, 'epoch': epoch,
-                                                      'stats': {key: Statistic[key][-1] for key in
-                                                                list(Statistic.keys())}})
+                                                      'stats': {key: statistics[key][-1] for key in
+                                                                list(statistics.keys())}})
 
     # Dump statistics to pickle
     with open(save_path + 'statistics.pkl', 'wb') as f:
-        pickle.dump(Statistic, f)
+        pickle.dump(statistics, f)
 
     # Return trained model and stats
-    return Q, Statistic
+    return Q, statistics
 
 
-def playGame(side_game, model, depth, player=None, mask_bad=False):
+def explore_step(env, last_obs, Q1, Q2, policy_func, replay_buffer, t):
+    store_step = False
+    reward = 0
+
+    if env.players == 1 or env.player == 0:
+        # Store last obs
+        index_obs_stored = replay_buffer.store_frame(last_obs)
+
+        # Get input to dqc
+        input_to_dqn = replay_buffer.encode_recent_observation()
+
+        # Choose action according to play policy
+        action, flag = policy_func(Q1, input_to_dqn, t)
+
+        # Perform env step according to action
+        obs, reward, _, _ = env.step(action)
+
+        # Raise flag for store step
+        store_step = True
+
+    # Perform env step according to opponents
+    if env.players > 1:
+        while env.player != 0:
+            if env.done:
+                break
+            # Swap observed perspective
+            opponent_obs = env.swap_state(player=env.player)[:, :, :2]
+
+            # Align obs shape to model input
+            opponent_input_to_dqn = torch.from_numpy(opponent_obs.transpose(2, 0, 1)).type(dtype).unsqueeze(0)
+
+            # Choose action according to model
+            with torch.no_grad():
+                opponent_action = Q2(opponent_input_to_dqn).data.max(dim=1)[1].cpu().numpy()
+
+            # perform env step according to action
+            new_obs, new_reward, new_done, _ = env.step(opponent_action, player=env.player)
+
+            # Aggregate information
+            reward -= new_reward if new_reward >= 0 else -0.01  # Do not learn from opponent stupidity and exploit
+            obs = new_obs
+
+    # Store data needed for the curr step
+    if store_step:
+        replay_buffer.store_effect(index_obs_stored, action, reward, env.done)
+
+    return obs, env.done, reward
+
+
+def train_step(Q, target_Q, optimizer, replay_buffer, batch_size, gamma, symmetry=False, error_clip=False, grad_clip=False):
+    # Collect experience batch
+    obs_batch, act_batch, rew_batch, next_obs_batch, done_mask = replay_buffer.sample(batch_size)
+
+    if symmetry:  # This feature hopefully helps the model to generate by forcing symmetric similarity
+        symm_mask1 = np.random.randint(0, 2, batch_size)
+        symm_mask2 = np.random.randint(0, 2, batch_size)
+        obs_batch[symm_mask1 == 1, :, :, :] = obs_batch[symm_mask1 == 1, :, :, ::-1]
+        act_batch[symm_mask1 == 1] = 6 - act_batch[symm_mask1 == 1]
+        next_obs_batch[symm_mask2 == 1, :, :, :] = next_obs_batch[symm_mask2 == 1, :, :, ::-1]
+
+    obs_batch = Variable(torch.from_numpy(obs_batch).type(dtype))
+    act_batch = Variable(torch.from_numpy(act_batch)).type(torch.LongTensor).view(-1, 1)
+    rew_batch = Variable(torch.from_numpy(rew_batch).type(dtype))
+    next_obs_batch = Variable(torch.from_numpy(next_obs_batch).type(dtype))
+    done_mask = Variable(torch.from_numpy(done_mask).type(dtype))
+
+    if USE_CUDA:
+        act_batch = act_batch.cuda()
+
+    # Calculate Q values for chosen action
+    current_Q_values = Q(obs_batch).gather(1, act_batch).squeeze(1)
+
+    # Calculate best action for next state (according to Q)
+    # Estimate next step Q values (according to target_Q)
+    with torch.no_grad():
+        next_act_batch = Q(next_obs_batch).max(dim=1)[1].detach().view(-1, 1)
+        next_Q_max_unmasked = target_Q(next_obs_batch).gather(1, next_act_batch).detach().squeeze(1)
+
+    # mask final steps
+    next_Q_max_masked = next_Q_max_unmasked * (1 - done_mask)
+
+    # Estimate Q values according to Bellman equation
+    target_Q_values = rew_batch + (gamma * next_Q_max_masked)
+
+    # Compute difference between current estimation and next step estimation
+    loss = F.smooth_l1_loss(current_Q_values, target_Q_values)
+    if error_clip:
+        loss = loss.clamp(-1, 1)
+
+    # Update Q network
+    optimizer.zero_grad()
+    loss.backward()
+    if grad_clip:
+        torch.nn.utils.clip_grad_value_(Q.parameters(), 1)  # Clip gradients for stability
+    optimizer.step()  # Does the update
+
+
+def evaluation_step(Q, optimizer, validation_data, validation_labels,
+                    save_path, statistics,
+                    min_error_rate,
+                    most_wins, min_error_rate_wins,
+                    most_wins_minimax4, most_wins_with_minimax4, min_error_rate_minimax4,
+                    most_wins_mask, min_error_rate_wins_mask,
+                    most_wins_minimax4_mask, most_wins_with_minimax4_mask, min_error_rate_minimax4_mask,
+                    t, learning_ends, epoch, t0, t0_time):
+    # Evaluate model on critical actions (validation set)
+    if validation_data is not None:
+        with torch.no_grad():
+            val_actions = Q(validation_data[:, :2, :, :])
+        statistics['ERROR_RATE'].append(evaluate(val_actions, validation_labels))
+        print('ERROR RATE {}'.format(statistics['ERROR_RATE'][-1]))
+
+    # Evaluate model on minimax opponent
+    side_game = Game()
+    turns = [0] * 2
+    scores = [0] * 2
+    turns_mask = [0] * 2
+    scores_mask = [0] * 2
+
+    for i, depth in enumerate([1, 2, 4]):
+        score = [0] * 3
+        bad_moves = 0
+        score_mask = [0] * 3
+        print('MINIMAX # DEPTH {} # '.format(depth), end='')
+
+        for p in range(2):
+            new_score, bad_move, turn, new_score_mask, turn_mask = play_game(side_game, Q, depth, p % 2, True)
+            score[0] += new_score > 0
+            score[1] += new_score == 0
+            score[2] += new_score < 0
+            bad_moves += bad_move
+            turns[p] = turn
+            scores[p] = new_score
+
+            score_mask[0] += new_score_mask > 0
+            score_mask[1] += new_score_mask == 0
+            score_mask[2] += new_score_mask < 0
+            turns_mask[p] = turn_mask
+            scores_mask[p] = new_score_mask
+
+        stats = score + [bad_moves, np.mean(turns)]
+        stats_mask = score_mask + [0, np.mean(turns_mask)]
+        statistics['MINIMAX_{}'.format(depth)].append(stats)
+        statistics['MINIMAX_{}_MASK'.format(depth)].append(stats_mask)
+        print('SCORE {}:{}:{} # BAD_MOVES {} $$$ {}:{} {}:{}'.format(score[0], score[1], score[2],
+                                                                     bad_moves, turns[0], scores[0],
+                                                                     turns[1], scores[1]))
+        print('MINIMAX # DEPTH {} # '.format(depth), end='')
+        print('SCORE {}:{}:{} #             $$$ {}:{} {}:{}'.format(score_mask[0], score_mask[1], score_mask[2],
+                                                                    turns_mask[0], scores_mask[0],
+                                                                    turns_mask[1], scores_mask[1]))
+
+    # Save model params
+    if validation_data is not None and statistics['ERROR_RATE'][-1] < min_error_rate:
+        model_save_filename = save_path + 'model_min_error_rate'
+        model_save_path = model_save_filename + '.pth.tar'
+        save_model(Q, model_save_path, optimizer, params={'t': t, 'epoch': epoch,
+                                                          'stats': {key: statistics[key][-1] for key in
+                                                                    list(statistics.keys())}})
+        min_error_rate = statistics['ERROR_RATE'][-1]
+
+    wins = statistics['MINIMAX_1'][-1][0] + statistics['MINIMAX_2'][-1][0] + statistics['MINIMAX_4'][-1][
+        0]  # + statistics['MINIMAX_6'][-1][0]
+    if wins > most_wins or \
+            wins == most_wins and statistics['ERROR_RATE'][-1] < min_error_rate_wins:
+        model_save_filename = save_path + 'model_max_wins_{}'.format(wins)
+        model_save_path = model_save_filename + '.pth.tar'
+        save_model(Q, model_save_path, optimizer, params={'t': t, 'epoch': epoch,
+                                                          'stats': {key: statistics[key][-1] for key in
+                                                                    list(statistics.keys())}})
+        most_wins = wins
+        min_error_rate_wins = statistics['ERROR_RATE'][-1]
+
+    if statistics['MINIMAX_4'][-1][0] > most_wins_minimax4 or \
+            statistics['MINIMAX_4'][-1][0] == most_wins_minimax4 and wins > most_wins_with_minimax4 or \
+            statistics['MINIMAX_4'][-1][0] == most_wins_minimax4 and wins == most_wins_with_minimax4 and \
+            statistics['ERROR_RATE'][-1] < min_error_rate_minimax4:
+        model_save_filename = save_path + 'model_minimax4'
+        model_save_path = model_save_filename + '.pth.tar'
+        save_model(Q, model_save_path, optimizer, params={'t': t, 'epoch': epoch,
+                                                          'stats': {key: statistics[key][-1] for key in
+                                                                    list(statistics.keys())}})
+        most_wins_minimax4 = statistics['MINIMAX_4'][-1][0]
+        most_wins_with_minimax4 = wins
+        min_error_rate_minimax4 = statistics['ERROR_RATE'][-1]
+
+    wins_mask = statistics['MINIMAX_1_MASK'][-1][0] + statistics['MINIMAX_2_MASK'][-1][0] + \
+                statistics['MINIMAX_4_MASK'][-1][0]  # + statistics['MINIMAX_6_MASK'][-1][0]
+    if wins_mask > most_wins_mask or \
+            wins_mask == most_wins_mask and statistics['ERROR_RATE'][-1] < min_error_rate_wins_mask:
+        model_save_filename = save_path + 'model_max_wins_{}_mask'.format(wins_mask)
+        model_save_path = model_save_filename + '.pth.tar'
+        save_model(Q, model_save_path, optimizer, params={'t': t, 'epoch': epoch,
+                                                          'stats': {key: statistics[key][-1] for key in
+                                                                    list(statistics.keys())}})
+        most_wins_mask = wins_mask
+        min_error_rate_wins_mask = statistics['ERROR_RATE'][-1]
+
+    if statistics['MINIMAX_4_MASK'][-1][0] > most_wins_minimax4_mask or \
+            statistics['MINIMAX_4_MASK'][-1][
+                0] == most_wins_minimax4_mask and wins_mask > most_wins_with_minimax4_mask or \
+            statistics['MINIMAX_4_MASK'][-1][
+                0] == most_wins_minimax4_mask and wins_mask == most_wins_with_minimax4_mask and statistics['ERROR_RATE'][
+        -1] < min_error_rate_minimax4_mask:
+        model_save_filename = save_path + 'model_minimax4_mask'
+        model_save_path = model_save_filename + '.pth.tar'
+        save_model(Q, model_save_path, optimizer, params={'t': t, 'epoch': epoch,
+                                                          'stats': {key: statistics[key][-1] for key in
+                                                                    list(statistics.keys())}})
+        most_wins_minimax4_mask = statistics['MINIMAX_4_MASK'][-1][0]
+        most_wins_with_minimax4_mask = wins_mask
+        min_error_rate_minimax4_mask = statistics['ERROR_RATE'][-1]
+
+    print('BEST: ER {} # WINS {} # WINS_MASK {}'.format(min_error_rate, most_wins, most_wins_mask))
+    print('---------------------------------------')
+    tm = time.localtime()
+    dt = (time.perf_counter() - t0_time) / 60
+    eta = round(dt * (learning_ends - t) / (t - t0))
+    eta_min = eta % 60
+    eta_hour = (eta // 60) % 24
+    eta_day = (eta // 60) // 24
+    print('TIME: {:02d}:{:02d}'.format(tm.tm_hour, tm.tm_min), end='')
+    print(' ### ETA: {}::{}:{}'.format(eta_day, eta_hour, eta_min))
+    t0_time = time.perf_counter()
+    t0 = t
+
+    return [min_error_rate, \
+           most_wins, min_error_rate_wins, \
+           most_wins_minimax4, most_wins_with_minimax4, min_error_rate_minimax4, \
+           most_wins_mask, min_error_rate_wins_mask, \
+           most_wins_minimax4_mask, most_wins_with_minimax4_mask, min_error_rate_minimax4_mask], \
+           t0, t0_time
+
+
+def play_game(side_game, model, depth, player=None, mask_bad=False):
     if player is None:
         player = random.randrange(2)
     obs, _ = side_game.reset(player)
