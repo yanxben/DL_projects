@@ -3,18 +3,18 @@ import os, random
 import torch
 import torch.optim as optim
 
-from model import DQN_FCN, DQN_FCN_VERY_WIDE, DQN_LINEAR, DQN_SKIP
-from dqn_train import DQNLearning
+from model import DQN_FCN, DQN_FCN_WIDE, DQN_LINEAR, DQN_SKIP
+from dqn_train import DQNLearning3
 from dqn_train import OptimizerSpec
 from utils_game import Game
 from utils_data import load_end_game_data
-from utils_schedule import LinearSchedule
+from utils_schedule import LinearSchedule, ConstSchedule
 from utils_plot import plot_stats, plot_state
 from play import play_game
 
-REPLAY_BUFFER_SIZE = 100000
-LEARNING_STARTS = 100000
-LEARNING_ENDS = 2000000
+REPLAY_BUFFER_SIZE = 10000
+LEARNING_STARTS = 10000
+LEARNING_ENDS = 10000000
 GAMMA = 0.99
 LEARNING_FREQ = 5
 TARGET_UPDATE_FREQ = 5
@@ -31,7 +31,7 @@ ERROR_CLIP = False
 GRAD_CLIP = False
 
 # Construct prefix
-PREFIX = 'very_wide_{}_{}_lr_{}e{}'.format(int(EPS_END / 1000000), EPS, LR_a, LR_b)
+PREFIX = 'test_{}_{}_lr_{}e{}'.format(int(EPS_END / 1000000), EPS, LR_a, LR_b)
 if SYMMETRY:
     PREFIX += '_symmetry_good'
 if ERROR_CLIP:
@@ -40,6 +40,16 @@ if GRAD_CLIP:
     PREFIX += '_gc'
 
 PREFIX = PREFIX.replace('.', '')
+
+PREFIX = ['5_01_lr_5e6_symmetry_good_ec_gc',
+          '5_01_lr_5e6_symmetry_good',
+          '5_01_lr_5e6_symmetry_good_gc']
+
+PREFIX = ['very_wide_5_01_lr_5e6_symmetry_good',
+          'very_wide_5_01_lr_5e6_symmetry_good',
+          'very_wide_5_01_lr_5e6_symmetry_good']
+
+MODELNAME = 'model_min_error_rate'
 
 # Look for GPU
 USE_CUDA = torch.cuda.is_available()
@@ -56,7 +66,7 @@ def train_model(game, validation_data=None, validation_labels=None):
     )
 
     # Schedule exploration parameter
-    exploration = LinearSchedule(EPS_END, EPS)
+    exploration = ConstSchedule(EPS)
 
     # Construct an epsilon greedy policy with given exploration schedule
     def epsilon_greedy_policy(model, obs, t):
@@ -89,13 +99,17 @@ def train_model(game, validation_data=None, validation_labels=None):
     # Save configurations to txt file
     # TODO
 
-    save_path = './model_{}/'.format(PREFIX)
-    if not os.path.isdir(save_path):
-        os.mkdir(save_path)
+    num_models = len(PREFIX)
+    load_paths = ['./model_{}/{}.pth.tar'.format(p, MODELNAME) for p in PREFIX]
+    save_paths = ['./model_{}_X/'.format(p) for p in PREFIX]
 
-    Q, statistics = DQNLearning(
+    for i in range(num_models):
+        if not os.path.isdir(save_paths[i]):
+            os.mkdir(save_paths[i])
+
+    Q, statistics = DQNLearning3(
         game=game,
-        q_func=DQN_FCN_VERY_WIDE,
+        q_func=DQN_FCN_WIDE,
         optimizer_spec=optimizer_spec,
         policy_func=epsilon_greedy_policy,
         replay_buffer_size=REPLAY_BUFFER_SIZE,
@@ -109,14 +123,16 @@ def train_model(game, validation_data=None, validation_labels=None):
         log_freq=LOG_FREQ,
         validation_data=validation_data,
         validation_labels=validation_labels,
-        save_path=save_path,
+        load_paths=load_paths,
+        save_paths=save_paths,
         symmetry=SYMMETRY,
         error_clip=ERROR_CLIP,
         grad_clip=GRAD_CLIP
     )
 
     # Plot and save stats
-    plot_stats(statistics, path=save_path, prefix=PREFIX+'_')
+    for n in range(num_models):
+        plot_stats(statistics[n], path=save_paths[n], prefix=PREFIX+'_X_')
 
 
 if __name__ == '__main__':
@@ -130,19 +146,11 @@ if __name__ == '__main__':
     #data, labels, win_labels, lose_labels = load_end_game_data(1000)
     data, labels, lose_labels, win_labels = load_end_game_data(1000)
     for n in range(labels.shape[0]):
-        if any(win_labels[n,:]):
-            labels[n, :] = win_labels[n,:]
+        if any(win_labels[n, :]):
+            labels[n, :] = win_labels[n, :]
         else:
-            labels[n, :] = lose_labels[n,:]
-    # Split train-test
-    #val_data = data[TRAIN_SIZE:, :, :, :]
-    #train_win_labels = win_labels[:TRAIN_SIZE, :]
-    #train_lose_labels = lose_labels[:TRAIN_SIZE, :]
-    #val_win_labels = win_labels[TRAIN_SIZE:, :]
-    #val_lose_labels = lose_labels[TRAIN_SIZE:, :]
+            labels[n, :] = lose_labels[n, :]
 
-    #train_labels = labels[:TRAIN_SIZE, :]
-    #val_labels = labels[DATA_SIZE:, :]
 
     # Run training
     #seed = 0 # Use a seed of zero (you may want to randomize the seed!)

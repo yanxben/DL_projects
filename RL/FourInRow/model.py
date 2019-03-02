@@ -58,6 +58,28 @@ class DQN_FCN_WIDE(nn.Module):
         return o7
 
 
+class DQN_FCN_VERY_WIDE(nn.Module):
+    def __init__(self):
+        super(DQN_FCN_VERY_WIDE, self).__init__()
+        self.conv1 = nn.Conv2d(2, 128, 3, stride=1)  # 7x6 -> 5x4
+        self.conv2 = nn.Conv2d(128, 512, 3, stride=1)  # 5x4 -> 3x2
+        self.linear4 = nn.Linear(512*3*2, 2048)
+        self.linear5 = nn.Linear(2048, 2048)
+        self.linear6 = nn.Linear(2048, 512)
+        self.linear7 = nn.Linear(512, 7)
+
+    def forward(self, X):
+        o1 = F.relu(self.conv1(X))
+        o2 = F.relu(self.conv2(o1))
+
+        o4 = o2.view(-1, 512*3*2)
+        o5 = F.relu(self.linear4(o4))
+        o6 = F.relu(self.linear5(o5))
+        o7 = F.relu(self.linear6(o6))
+        o8 = self.linear7(o7)
+        return o8
+
+
 class DQN_LINEAR(nn.Module):
     def __init__(self):
         super(DQN_LINEAR, self).__init__()
