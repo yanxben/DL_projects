@@ -1,4 +1,6 @@
 .idea/
 *.pyc
-data/
-checkpoints/
+
+#Image merger
+ImageMerger/checkpoints/
+ImageMerger/plots/
