@@ -2,12 +2,13 @@ import torch
 import torch.nn as nn
 
 class E1(nn.Module):
-    def __init__(self, input_nc, last_conv_nc, sep, size):
+    def __init__(self, input_nc, last_conv_nc, sep, input_size):
         super(E1, self).__init__()
         self.input_nc = input_nc
         self.last_conv_nc = last_conv_nc
         self.sep = sep
-        self.size = size
+        self.input_size = input_size
+        self.feature_size = input_size // 32
 
         self.full = nn.Sequential(
             nn.Conv2d(self.input_nc, 32, 4, 2, 1),
@@ -32,16 +33,17 @@ class E1(nn.Module):
 
     def forward(self, x):
         x = self.full(x)
-        x = x.view(-1, (self.last_conv_nc - self.sep) * self.size * self.size)
+        x = x.view(-1, (self.last_conv_nc - self.sep) * self.feature_size * self.feature_size)
         return x
 
 
 class E2(nn.Module):
-    def __init__(self, input_nc, sep, size):
+    def __init__(self, input_nc, sep, input_size):
         super(E2, self).__init__()
         self.input_nc = input_nc
         self.sep = sep
-        self.size = size
+        self.input_size = input_size
+        self.feature_size = input_size // 32
 
         self.full = nn.Sequential(
             nn.Conv2d(self.input_nc, 32, 4, 2, 1),
@@ -66,16 +68,17 @@ class E2(nn.Module):
 
     def forward(self, x):
         x = self.full(x)
-        x = x.view(-1, self.sep * self.size * self.size)
+        x = x.view(-1, self.sep * self.feature_size * self.feature_size)
         return x
 
 
 class Decoder(nn.Module):
-    def __init__(self, output_nc, last_conv_nc, size):
+    def __init__(self, output_nc, last_conv_nc, input_size):
         super(Decoder, self).__init__()
         self.output_nc = output_nc
         self.last_conv_nc = last_conv_nc
-        self.size = size
+        self.input_size = input_size
+        self.feature_size = input_size // 32
 
         self.main = nn.Sequential(
             #nn.ConvTranspose2d(last_conv_nc, last_conv_nc, 4, 2, 1),
@@ -98,24 +101,24 @@ class Decoder(nn.Module):
         )
 
     def forward(self, x):
-        x = x.view(-1, self.last_conv_nc, self.size, self.size)
+        x = x.view(-1, self.last_conv_nc, self.feature_size, self.feature_size)
         x = self.main(x)
         return x
 
 
 class Generator(nn.Module):
-    def __init__(self, input_nc, output_nc, last_conv_nc, sep, size, use_mask, preprocess):
+    def __init__(self, input_nc, output_nc, last_conv_nc, sep, input_size, use_mask, preprocess):
         super(Generator, self).__init__()
         self.input_nc = input_nc + (1 if use_mask else 0)
         self.output_nc = output_nc
         self.last_conv_nc = last_conv_nc
         self.sep = sep
-        self.size = size
+        self.input_size = input_size
         self.preprocess = preprocess
 
-        self.E_A = E1(self.input_nc, last_conv_nc, sep, size)
-        self.E_B = E2(self.input_nc, sep, size)
-        self.Decoder = Decoder(output_nc, last_conv_nc, size)
+        self.E_A = E1(self.input_nc, last_conv_nc, sep, input_size)
+        self.E_B = E2(self.input_nc, sep, input_size)
+        self.Decoder = Decoder(output_nc, last_conv_nc, input_size)
 
     def forward(self, x, mask_in, mode=None):
         N, B, C, H, W = x.shape
@@ -131,7 +134,7 @@ class Generator(nn.Module):
 
         if mode is None or mode == 0:
             if self.preprocess:
-                x1_A = (1-mask_in1) * x1 + mask_in1 * torch.mean(x1, dim=1, keepdim=True)
+                x1_A = (1-mask_in1) * x1 # + mask_in1 * torch.mean(x1, dim=1, keepdim=True)
             else:
                 x1_A = x1
             x1_A = torch.cat([x1_A, mask_in1[:, 0, :, :].unsqueeze(1)], dim=1)
@@ -142,7 +145,7 @@ class Generator(nn.Module):
             y1 = self.Decoder(z1)
         if mode is None or mode == 1:
             if self.preprocess:
-                x2_A = (1-mask_in2) * x2 + mask_in2 * torch.mean(x2, dim=1, keepdim=True)
+                x2_A = (1-mask_in2) * x2 # + mask_in2 * torch.mean(x2, dim=1, keepdim=True)
             else:
                 x2_A = x2
             x2_A = torch.cat([x2_A, mask_in2[:, 0, :, :].unsqueeze(1)], dim=1)
@@ -163,36 +166,37 @@ class Generator(nn.Module):
 
 
 class Disc(nn.Module):
-    def __init__(self, input_nc, last_conv_nc, sep, size):
+    def __init__(self, input_nc, last_conv_nc, sep, input_size):
         super(Disc, self).__init__()
         self.input_nc = input_nc
         self.last_conv_nc = last_conv_nc
         self.sep = sep
-        self.size = size
+        self.feature_size = input_size // 32
 
         self.classify = nn.Sequential(
-            nn.Linear((last_conv_nc - self.sep) * self.size * self.size, last_conv_nc),
+            nn.Linear((last_conv_nc - self.sep) * self.feature_size * self.feature_size, last_conv_nc),
             nn.LeakyReLU(0.2, inplace=True),
             nn.Linear(last_conv_nc, 1),
             nn.Sigmoid()
         )
 
     def forward(self, x):
-        x = x.view(-1, (self.last_conv_nc - self.sep) * self.size * self.size)
+        x = x.view(-1, (self.last_conv_nc - self.sep) * self.feature_size * self.feature_size)
         x = self.classify(x)
         x = x.view(-1)
         return x
 
 
 class Discriminator(nn.Module):
-    def __init__(self, input_nc, last_conv_nc, size):
+    def __init__(self, input_nc, last_conv_nc, input_size):
         super(Discriminator, self).__init__()
         self.input_nc = input_nc
         self.last_conv_nc = last_conv_nc
-        self.size = size
+        self.input_size = input_size
+        self.feature_size = input_size // 32
 
-        self.E = E1(input_nc, last_conv_nc, 0, size)
-        self.linear = nn.Linear(last_conv_nc * size * size, 1)
+        self.E = E1(input_nc, last_conv_nc, 0, self.input_size)
+        self.linear = nn.Linear(last_conv_nc * self.feature_size * self.feature_size, 1)
         self.activation = nn.Sigmoid()
 
     def forward(self, x):
