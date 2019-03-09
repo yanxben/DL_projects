@@ -2,5 +2,5 @@
 *.pyc
 
 #Image merger
-ImageMerger/checkpoints/
-ImageMerger/plots/
+*/ImageMerger/checkpoints/
+*/ImageMerger/plots/
