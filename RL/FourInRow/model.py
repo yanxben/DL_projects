@@ -58,6 +58,33 @@ class DQN_FCN_WIDE(nn.Module):
         return o7
 
 
+class DQN_FCN_WIDE_PREDICTION(nn.Module):
+    def __init__(self):
+        super(DQN_FCN_WIDE_PREDICTION, self).__init__()
+        self.conv1 = nn.Conv2d(2, 64, 3, stride=1)  # 7x6 -> 5x4
+        self.conv2 = nn.Conv2d(64, 256, 3, stride=1)  # 5x4 -> 3x2
+        self.linear4 = nn.Linear(256*3*2, 2048)
+        self.linear5 = nn.Linear(2048, 512)
+        self.linear6 = nn.Linear(512, 7)
+        self.linear_done = nn.Linear(512, 7)
+        self.linear_reward = nn.Linear(512, 7)
+
+    def forward(self, X, prediction=False):
+        o1 = F.relu(self.conv1(X))
+        o2 = F.relu(self.conv2(o1))
+        o4 = o2.view(-1, 256*3*2)
+        o5 = F.relu(self.linear4(o4))
+        o6 = F.relu(self.linear5(o5))
+        o7 = self.linear6(o6)
+
+        if prediction:
+            done = F.sigmoid(self.linear(o6))
+            reward = self.linear(o6)
+            return o7, done, reward
+
+        return o7
+
+
 class DQN_FCN_VERY_WIDE(nn.Module):
     def __init__(self):
         super(DQN_FCN_VERY_WIDE, self).__init__()

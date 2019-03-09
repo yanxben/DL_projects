@@ -3,7 +3,7 @@ import os, random
 import torch
 import torch.optim as optim
 
-from model import DQN_FCN, DQN_FCN_VERY_WIDE, DQN_LINEAR, DQN_SKIP
+from model import DQN_FCN, DQN_FCN_WIDE, DQN_FCN_WIDE_PREDICTION, DQN_LINEAR, DQN_SKIP
 from dqn_train import DQNLearning
 from dqn_train import OptimizerSpec
 from utils_game import Game
@@ -14,7 +14,7 @@ from play import play_game
 
 REPLAY_BUFFER_SIZE = 100000
 LEARNING_STARTS = 100000
-LEARNING_ENDS = 2000000
+LEARNING_ENDS = 10000000
 GAMMA = 0.99
 LEARNING_FREQ = 5
 TARGET_UPDATE_FREQ = 5
@@ -29,15 +29,18 @@ EPS_END = 5000000
 SYMMETRY = True
 ERROR_CLIP = False
 GRAD_CLIP = False
+PREDICTION = True
 
 # Construct prefix
-PREFIX = 'very_wide_{}_{}_lr_{}e{}'.format(int(EPS_END / 1000000), EPS, LR_a, LR_b)
+PREFIX = '{}_{}_lr_{}e{}'.format(int(EPS_END / 1000000), EPS, LR_a, LR_b)
 if SYMMETRY:
     PREFIX += '_symmetry_good'
 if ERROR_CLIP:
     PREFIX += '_ec'
 if GRAD_CLIP:
     PREFIX += '_gc'
+if PREDICTION:
+    PREFIX += '_pr'
 
 PREFIX = PREFIX.replace('.', '')
 
@@ -89,13 +92,13 @@ def train_model(game, validation_data=None, validation_labels=None):
     # Save configurations to txt file
     # TODO
 
-    save_path = './model_{}/'.format(PREFIX)
+    save_path = './checkpoints/model_{}/'.format(PREFIX)
     if not os.path.isdir(save_path):
         os.mkdir(save_path)
 
     Q, statistics = DQNLearning(
         game=game,
-        q_func=DQN_FCN_VERY_WIDE,
+        q_func=DQN_FCN_WIDE_PREDICTION if PREDICTION else DQN_FCN_WIDE,
         optimizer_spec=optimizer_spec,
         policy_func=epsilon_greedy_policy,
         replay_buffer_size=REPLAY_BUFFER_SIZE,
@@ -112,10 +115,12 @@ def train_model(game, validation_data=None, validation_labels=None):
         save_path=save_path,
         symmetry=SYMMETRY,
         error_clip=ERROR_CLIP,
-        grad_clip=GRAD_CLIP
+        grad_clip=GRAD_CLIP,
+        prediction=PREDICTION
     )
 
     # Plot and save stats
+    plot_path = './plots/'
     plot_stats(statistics, path=save_path, prefix=PREFIX+'_')
 
 

@@ -57,7 +57,8 @@ def DQNLearning(
     save_path='./checkpoints/',
     symmetry=False,
     error_clip=False,
-    grad_clip=False
+    grad_clip=False,
+    prediction=False
 ):
     """Run Deep Q-learning algorithm.
 
@@ -512,7 +513,7 @@ def explore_step(env, last_obs, Q1, Q2, policy_func, replay_buffer, t):
     return obs, env.done, reward
 
 
-def train_step(Q, target_Q, optimizer, replay_buffer, batch_size, gamma, symmetry=False, error_clip=False, grad_clip=False):
+def train_step(Q, target_Q, optimizer, replay_buffer, batch_size, gamma, symmetry=False, error_clip=False, grad_clip=False, prediction=False):
     # Collect experience batch
     obs_batch, act_batch, rew_batch, next_obs_batch, done_mask = replay_buffer.sample(batch_size)
 
@@ -533,7 +534,14 @@ def train_step(Q, target_Q, optimizer, replay_buffer, batch_size, gamma, symmetr
         act_batch = act_batch.cuda()
 
     # Calculate Q values for chosen action
-    current_Q_values = Q(obs_batch).gather(1, act_batch).squeeze(1)
+    if prediction:
+        current_Q_values_all, predict_done_all, predict_reward_all = Q(obs_batch, prediction)
+        current_Q_values = current_Q_values_all.gather(1, act_batch).squeeze(1)
+        predict_done = predict_done_all.gather(1, act_batch).squeeze(1)
+        predict_reward = predict_reward_all.gather(1, act_batch).squeeze(1)
+
+    else:
+        current_Q_values = Q(obs_batch).gather(1, act_batch).squeeze(1)
 
     # Calculate best action for next state (according to Q)
     # Estimate next step Q values (according to target_Q)
@@ -549,6 +557,12 @@ def train_step(Q, target_Q, optimizer, replay_buffer, batch_size, gamma, symmetr
 
     # Compute difference between current estimation and next step estimation
     loss = F.smooth_l1_loss(current_Q_values, target_Q_values)
+
+    # Compare prediction indicators
+    if prediction:
+        loss += 0.2 * F.binary_cross_entropy(predict_done, done_mask)
+        loss += 0.2 * F.smooth_l1_loss(predict_reward, rew_batch)
+
     if error_clip:
         loss = loss.clamp(-1, 1)
 

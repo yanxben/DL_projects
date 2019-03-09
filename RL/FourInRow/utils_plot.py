@@ -210,7 +210,7 @@ def plot_stats(stats, path='./', prefix='', delta=10, stride=1):
 if __name__ == "__main__":
     import pickle
 
-    with open('./model_5_01_lr_5e6_symmetry_good/Statistics.pkl', 'rb') as f:
+    with open('./checkpoints/model_5_01_lr_5e6_symmetry_good/Statistics.pkl', 'rb') as f:
         stats = pickle.load(f)
 
-    plot_stats(stats, path='./', prefix='model_5_01_lr_5e6_symmetry_good_', delta=10, stride=1)
+    plot_stats(stats, path='./plots/', prefix='model_5_01_lr_5e6_symmetry_good_', delta=10, stride=1)
