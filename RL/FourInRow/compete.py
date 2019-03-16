@@ -163,9 +163,9 @@ if __name__ == "__main__":
             scores[i, j] = play_game(env, models[i], models[j]) - play_game(env, models[j], models[i])
             scores[j, i] = -scores[i, j]
 
-    plt.figure()
-    plt.imshow(scores)
+    #plt.figure()
+    mat = plt.matshow(scores)
     plt.xticks(range(len(checkpoint_path)))
     plt.yticks(range(len(checkpoint_path)), [p.split('/')[2] for p in checkpoint_path])
-    plt.colorbar(spacing='proportional')
+    plt.colorbar(mat, ticks=[-2, -1, 0, 1, 2])
     plt.show()

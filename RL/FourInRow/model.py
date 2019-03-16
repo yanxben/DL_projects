@@ -82,8 +82,8 @@ class DQN_CNN_WIDE_PREDICTION(nn.Module):
         o7 = self.linear6(o6)
 
         if prediction:
-            done = F.sigmoid(self.linear(o6))
-            reward = self.linear(o6)
+            done = F.sigmoid(self.linear_done(o6))
+            reward = self.linear_reward(o6)
             return o7, done, reward
 
         return o7

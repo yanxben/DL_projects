@@ -58,7 +58,8 @@ def DQNLearning(
     symmetry=False,
     error_clip=False,
     grad_clip=False,
-    prediction=False
+    prediction=False,
+    action_mask=False
 ):
     """Run Deep Q-learning algorithm.
 
@@ -166,7 +167,7 @@ def DQNLearning(
             break
 
         # Perform env step according to player
-        obs, done, reward = explore_step(env, last_obs, Q, Q, policy_func, replay_buffer, t)
+        obs, done, reward = explore_step(env, last_obs, Q, Q, policy_func, replay_buffer, t, action_mask)
 
         # If done, start new game
         if done:
@@ -193,7 +194,7 @@ def DQNLearning(
                 t % learning_freq == 0 and
                 replay_buffer.can_sample(batch_size)):
 
-            train_step(Q, target_Q, optimizer, replay_buffer, batch_size, gamma, symmetry, error_clip, grad_clip)
+            train_step(Q, target_Q, optimizer, replay_buffer, batch_size, gamma, symmetry, error_clip, grad_clip, prediction)
 
             # Update target Q network and validate benchmarks
             num_param_updates += 1
@@ -265,7 +266,9 @@ def DQNLearning3(
     save_paths=['./checkpoints1/', './checkpoints2/', './checkpoints3/'],
     symmetry=False,
     error_clip=False,
-    grad_clip=False
+    grad_clip=False,
+    prediction=False,
+    action_mask=False
 ):
     """Run Deep Q-learning algorithm.
 
@@ -388,7 +391,7 @@ def DQNLearning3(
 
         for n in range(num_models):
             # Perform env step according to player
-            obs, done, reward = explore_step(envs[n], last_obs[n], Q[n], Q[model_countering[n]], policy_func, replay_buffer[n], t)
+            obs, done, reward = explore_step(envs[n], last_obs[n], Q[n], Q[model_countering[n]], policy_func, replay_buffer[n], t, action_mask)
 
             # If done, start new game
             if done:
@@ -403,7 +406,6 @@ def DQNLearning3(
                 # Restart game
                 last_obs[n], _ = envs[n].reset(random.choice(range(2)))
                 plays[n] += 1
-                #model_playing = (model_playing + 1) % num_models
                 model_countering[n] = random.randrange(num_models)
             else:
                 last_obs[n] = obs
@@ -418,7 +420,7 @@ def DQNLearning3(
                 all([replay_buffer[n].can_sample(batch_size) for n in range(num_models)])):
 
             for n in range(num_models):
-                train_step(Q[n], target_Q[n], optimizer[n], replay_buffer[n], batch_size, gamma, symmetry, error_clip, grad_clip)
+                train_step(Q[n], target_Q[n], optimizer[n], replay_buffer[n], batch_size, gamma, symmetry, error_clip, grad_clip, prediction)
 
             # Update target Q network and validate benchmarks
             num_param_updates += 1
@@ -470,7 +472,7 @@ def DQNLearning3(
     return Q, statistics
 
 
-def explore_step(env, last_obs, Q1, Q2, policy_func, replay_buffer, t):
+def explore_step(env, last_obs, Q1, Q2, policy_func, replay_buffer, t, action_mask):
     store_step = False
     reward = 0
 
@@ -482,7 +484,10 @@ def explore_step(env, last_obs, Q1, Q2, policy_func, replay_buffer, t):
         input_to_dqn = replay_buffer.encode_recent_observation()
 
         # Choose action according to play policy
-        action, flag = policy_func(Q1, input_to_dqn, t, action_mask=_valid_action(env.state))
+        if action_mask:
+            action, flag = policy_func(Q1, input_to_dqn, t, action_mask=_valid_action(env.state))
+        else:
+            action, flag = policy_func(Q1, input_to_dqn, t)
 
         # Perform env step according to action
         obs, reward, _, _ = env.step(action)

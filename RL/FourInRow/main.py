@@ -27,9 +27,10 @@ ALPHA = 0.95
 EPS = 0.1
 EPS_END = 5000000
 SYMMETRY = True
-ERROR_CLIP = False
+ERROR_CLIP = True
 GRAD_CLIP = True
 PREDICTION = True
+ACTION_MASK = True
 
 # Construct prefix
 PREFIX = '{}_{}_{}_lr_{}e{}'.format(LEARNING_ENDS // 1000000, EPS_END // 1000000, EPS, LR_a, LR_b)
@@ -41,7 +42,8 @@ if GRAD_CLIP:
     PREFIX += '_gc'
 if PREDICTION:
     PREFIX += '_pr'
-
+if ACTION_MASK:
+    PREFIX += '_am'
 PREFIX = PREFIX.replace('.', '')
 
 # Look for GPU
@@ -70,7 +72,7 @@ def train_model(game, validation_data=None, validation_labels=None):
             action = model(obs)
             return action.data.max(dim=1)[1].cpu().numpy(), True
         else:
-            if action_mask is None or True:
+            if action_mask is None:
                 return np.random.choice(np.arange(env.BOARD_W)), False
             else:
                 return random.choice(np.arange(env.BOARD_W)[action_mask == 1]), False
@@ -116,7 +118,8 @@ def train_model(game, validation_data=None, validation_labels=None):
         symmetry=SYMMETRY,
         error_clip=ERROR_CLIP,
         grad_clip=GRAD_CLIP,
-        prediction=PREDICTION
+        prediction=PREDICTION,
+        action_mask=ACTION_MASK
     )
 
     # Plot and save stats
