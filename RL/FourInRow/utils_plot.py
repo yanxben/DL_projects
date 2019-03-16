@@ -46,6 +46,7 @@ def plot_state(state, title=None, win_actions=None, lose_actions=None, action=No
                 plt.text(col - 0.2, 4 - 0.2, '{:.2f}'.format(stats_symm[0][col]), fontsize=12, color='w')
                 plt.text(col - 0.2, 4 + 0.2, '{:.2f}'.format(stats_symm[1][col]), fontsize=12, color='w')
 
+
 def plot_obs(obs, title=None):
     # Plot image
     state = np.zeros([obs.shape[0], obs.shape[1], 3])
@@ -64,7 +65,7 @@ def plot_obs(obs, title=None):
         plt.title(title)
 
 
-def plot_stats(stats, path='./', prefix='', delta=10, stride=1):
+def plot_stats(stats, path='./', prefix='', delta=10, stride=1, log_freq=1000):
     """
     Statistic = {
         'TURNS_RATE': [],
@@ -82,7 +83,7 @@ def plot_stats(stats, path='./', prefix='', delta=10, stride=1):
     minimax4_stats = stats['MINIMAX_4']
     #minimax6_stats = stats['MINIMAX_6']
 
-    epochs = list(range(1000, (len(turns_rate)+1)*1000, 1000))
+    epochs = list(range(log_freq, (len(turns_rate)+1)*log_freq, log_freq))
 
     plt.figure()
     plt.subplot(1,2,1)

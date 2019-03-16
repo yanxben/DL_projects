@@ -1,16 +1,16 @@
 import os, random
 
+import numpy as np
 import torch
 import torch.optim as optim
 
-from model import DQN_FCN, DQN_FCN_WIDE, DQN_FCN_WIDE_PREDICTION, DQN_LINEAR, DQN_SKIP
+from model import DQN_CNN, DQN_CNN_WIDE, DQN_CNN_WIDE_PREDICTION, DQN_LINEAR, DQN_SKIP, DQN_SKIP_WIDE
 from dqn_train import DQNLearning
 from dqn_train import OptimizerSpec
 from utils_game import Game
 from utils_data import load_end_game_data
 from utils_schedule import LinearSchedule
-from utils_plot import plot_stats, plot_state
-from play import play_game
+from utils_plot import plot_stats
 
 REPLAY_BUFFER_SIZE = 100000
 LEARNING_STARTS = 100000
@@ -20,19 +20,19 @@ LEARNING_FREQ = 5
 TARGET_UPDATE_FREQ = 5
 LOG_FREQ = 4000
 BATCH_SIZE = 64
-LR_a = 5
-LR_b = 6
+LR_a = 1
+LR_b = 5
 LEARNING_RATE = LR_a * (10 ** -LR_b)
 ALPHA = 0.95
 EPS = 0.1
 EPS_END = 5000000
 SYMMETRY = True
 ERROR_CLIP = False
-GRAD_CLIP = False
+GRAD_CLIP = True
 PREDICTION = True
 
 # Construct prefix
-PREFIX = '{}_{}_lr_{}e{}'.format(int(EPS_END / 1000000), EPS, LR_a, LR_b)
+PREFIX = '{}_{}_{}_lr_{}e{}'.format(LEARNING_ENDS // 1000000, EPS_END // 1000000, EPS, LR_a, LR_b)
 if SYMMETRY:
     PREFIX += '_symmetry_good'
 if ERROR_CLIP:
@@ -62,7 +62,7 @@ def train_model(game, validation_data=None, validation_labels=None):
     exploration = LinearSchedule(EPS_END, EPS)
 
     # Construct an epsilon greedy policy with given exploration schedule
-    def epsilon_greedy_policy(model, obs, t):
+    def epsilon_greedy_policy(model, obs, t, action_mask=None):
         sample = random.random()
         eps_threshold = exploration.value(t)
         if sample > eps_threshold:
@@ -70,7 +70,10 @@ def train_model(game, validation_data=None, validation_labels=None):
             action = model(obs)
             return action.data.max(dim=1)[1].cpu().numpy(), True
         else:
-            return random.randint(0, env.BOARD_W-1), False
+            if action_mask is None or True:
+                return np.random.choice(np.arange(env.BOARD_W)), False
+            else:
+                return random.choice(np.arange(env.BOARD_W)[action_mask == 1]), False
 
     # Set stopping criterion
     def stopping_criterion(t):
@@ -89,16 +92,13 @@ def train_model(game, validation_data=None, validation_labels=None):
         ALPHA {} \n \
         EPS {}".format(PREFIX, BATCH_SIZE, GAMMA, REPLAY_BUFFER_SIZE, LEARNING_STARTS, LEARNING_FREQ, TARGET_UPDATE_FREQ, LOG_FREQ, LEARNING_RATE, ALPHA, EPS))
 
-    # Save configurations to txt file
-    # TODO
-
     save_path = './checkpoints/model_{}/'.format(PREFIX)
     if not os.path.isdir(save_path):
         os.mkdir(save_path)
 
     Q, statistics = DQNLearning(
         game=game,
-        q_func=DQN_FCN_WIDE_PREDICTION if PREDICTION else DQN_FCN_WIDE,
+        q_func=DQN_CNN_WIDE_PREDICTION if PREDICTION else DQN_CNN_WIDE,
         optimizer_spec=optimizer_spec,
         policy_func=epsilon_greedy_policy,
         replay_buffer_size=REPLAY_BUFFER_SIZE,
@@ -121,14 +121,10 @@ def train_model(game, validation_data=None, validation_labels=None):
 
     # Plot and save stats
     plot_path = './plots/'
-    plot_stats(statistics, path=save_path, prefix=PREFIX+'_')
+    plot_stats(statistics, path=plot_path, prefix=PREFIX+'_')
 
 
 if __name__ == '__main__':
-    # Get Atari games.
-    # Change the index to select a different game.
-    #task = benchmark.tasks[3]
-
     # Load validation set
     DATA_SIZE = 1000
     # Temporal swap until recollection
@@ -150,7 +146,6 @@ if __name__ == '__main__':
     #val_labels = labels[DATA_SIZE:, :]
 
     # Run training
-    #seed = 0 # Use a seed of zero (you may want to randomize the seed!)
     game = Game
 
     train_model(game, data, labels)

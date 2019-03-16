@@ -51,7 +51,7 @@ def DQNLearning(
     learning_freq=5,
     frame_history_len=1,
     target_update_freq=5,
-    log_freq=10,
+    log_freq=1000,
     validation_data=None,
     validation_labels=None,
     save_path='./checkpoints/',
@@ -127,6 +127,7 @@ def DQNLearning(
 
     # Checkpoint parameters
     statistics = {
+        'EPOCH': [],
         'TURNS_RATE': [],
         'ERROR_RATE': [],
         'MINIMAX_1': [],
@@ -205,6 +206,7 @@ def DQNLearning(
 
                 # Evaluate model on benchmarks
                 if epoch % log_freq == 0:
+                    statistics['EPOCH'].append(epoch)
                     # Report reward and turn history
                     c = Counter(reward_history)
                     print('EPOCH {} T {} PLAYS {}'.format(epoch, t, plays))
@@ -222,6 +224,10 @@ def DQNLearning(
                         save_path, statistics,
                         *stats_values, t, learning_ends, epoch, t0, t0_time
                     )
+
+                    # Dump statistics to pickle
+                    with open(save_path + 'statistics.pkl', 'wb') as f:
+                        pickle.dump(statistics, f)
                     print('---------------------------------------')
 
     # Save last model
@@ -476,7 +482,7 @@ def explore_step(env, last_obs, Q1, Q2, policy_func, replay_buffer, t):
         input_to_dqn = replay_buffer.encode_recent_observation()
 
         # Choose action according to play policy
-        action, flag = policy_func(Q1, input_to_dqn, t)
+        action, flag = policy_func(Q1, input_to_dqn, t, action_mask=_valid_action(env.state))
 
         # Perform env step according to action
         obs, reward, _, _ = env.step(action)
@@ -596,6 +602,8 @@ def evaluation_step(game, Q, optimizer, validation_data, validation_labels,
     turns_mask = [0] * 2
     scores_mask = [0] * 2
 
+    tm = time.localtime()
+    print('TIME: {:02d}:{:02d}'.format(tm.tm_hour, tm.tm_min))
     for i, depth in enumerate([1, 2, 4]):
         score = [0] * 3
         bad_moves = 0

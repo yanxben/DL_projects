@@ -5,11 +5,7 @@ import matplotlib.pyplot as plt
 
 import torch
 
-from utils_game import Game
 from utils_plot import plot_state
-from utils_save import load_model
-
-from model import DQN_FCN_WIDE
 
 USE_CUDA = False
 dtype = torch.cuda.FloatTensor if USE_CUDA else torch.FloatTensor
@@ -91,11 +87,15 @@ def play_game(env, Q):
 
 
 if __name__ == "__main__":
+    from model import DQN_CNN_WIDE
+    from utils_save import load_model
+    from utils_game import Game
+
     env = Game()
 
-    Q1 = DQN_FCN_WIDE()
-    Q2 = DQN_FCN_WIDE()
-    Q3 = DQN_FCN_WIDE()
+    Q1 = DQN_CNN_WIDE()
+    Q2 = DQN_CNN_WIDE()
+    Q3 = DQN_CNN_WIDE()
     #checkpoint_path = './model_5_01_lr_5e6_symmetry_good_gc/model_max_wins_6_mask.pth.tar'
     model = 'model_min_error_rate'
     checkpoint_path1 = './model_5_01_lr_5e6_symmetry_good_ec_gc/' + model + '.pth.tar'

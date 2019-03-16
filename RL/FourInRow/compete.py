@@ -9,7 +9,7 @@ from utils_game import Game
 from utils_plot import plot_state
 from utils_save import load_model
 
-from model import DQN_FCN_WIDE
+from model import DQN_CNN_WIDE, DQN_CNN_WIDE_PREDICTION
 
 USE_CUDA = False
 dtype = torch.cuda.FloatTensor if USE_CUDA else torch.FloatTensor
@@ -111,36 +111,46 @@ if __name__ == "__main__":
 
     #checkpoint_path = './model_5_01_lr_5e6_symmetry_good_gc/model_max_wins_6_mask.pth.tar'
     checkpoint_path = []
-    modelname = 'model_min_error_rate'
-    checkpoint_path.append('./checkpoints_5_01/' + modelname + '.pth.tar')
-    checkpoint_path.append('./checkpoints_5_001/' + modelname + '.pth.tar')
-    checkpoint_path.append('./checkpoints_9_001/' + modelname + '.pth.tar')
-    checkpoint_path.append('./model_5_01_lr_1e5_symmetry_good_ec_gc/' + modelname + '.pth.tar')
-    checkpoint_path.append('./model_5_01_lr_5e6_symmetry_good_ec_gc/' + modelname + '.pth.tar')
-    checkpoint_path.append('./model_5_01_lr_5e6_symmetry_good_gc/' + modelname + '.pth.tar')
-    checkpoint_path.append('./model_5_01_lr_5e6_symmetry_good/' + modelname + '.pth.tar')
-
-    modelname = 'model_max_wins_6'
-    checkpoint_path.append('./checkpoints_5_01/' + 'model_max_wins_5' + '.pth.tar')
-    checkpoint_path.append('./checkpoints_5_001/' + 'model_max_wins_5' + '.pth.tar')
-    checkpoint_path.append('./checkpoints_9_001/' + modelname + '.pth.tar')
-    checkpoint_path.append('./model_5_01_lr_1e5_symmetry_good_ec_gc/' + modelname + '.pth.tar')
-    checkpoint_path.append('./model_5_01_lr_5e6_symmetry_good_ec_gc/' + modelname + '.pth.tar')
-    checkpoint_path.append('./model_5_01_lr_5e6_symmetry_good_gc/' + modelname + '.pth.tar')
-    checkpoint_path.append('./model_5_01_lr_5e6_symmetry_good/' + modelname + '.pth.tar')
-
-    modelname = 'model_minimax4'
-    checkpoint_path.append('./checkpoints_5_01/' + modelname + '.pth.tar')
-    checkpoint_path.append('./checkpoints_5_001/' + modelname + '.pth.tar')
-    checkpoint_path.append('./checkpoints_9_001/' + modelname + '.pth.tar')
-    checkpoint_path.append('./model_5_01_lr_1e5_symmetry_good_ec_gc/' + modelname + '.pth.tar')
-    checkpoint_path.append('./model_5_01_lr_5e6_symmetry_good_ec_gc/' + modelname + '.pth.tar')
-    checkpoint_path.append('./model_5_01_lr_5e6_symmetry_good_gc/' + modelname + '.pth.tar')
-    checkpoint_path.append('./model_5_01_lr_5e6_symmetry_good/' + modelname + '.pth.tar')
-
+    # modelname = 'model_min_error_rate'
+    # checkpoint_path.append('./checkpoints_5_01/' + modelname + '.pth.tar')
+    # checkpoint_path.append('./checkpoints_5_001/' + modelname + '.pth.tar')
+    # checkpoint_path.append('./checkpoints_9_001/' + modelname + '.pth.tar')
+    # checkpoint_path.append('./model_5_01_lr_1e5_symmetry_good_ec_gc/' + modelname + '.pth.tar')
+    # checkpoint_path.append('./model_5_01_lr_5e6_symmetry_good_ec_gc/' + modelname + '.pth.tar')
+    # checkpoint_path.append('./model_5_01_lr_5e6_symmetry_good_gc/' + modelname + '.pth.tar')
+    # checkpoint_path.append('./model_5_01_lr_5e6_symmetry_good/' + modelname + '.pth.tar')
+    #
+    # modelname = 'model_max_wins_6'
+    # checkpoint_path.append('./checkpoints_5_01/' + 'model_max_wins_5' + '.pth.tar')
+    # checkpoint_path.append('./checkpoints_5_001/' + 'model_max_wins_5' + '.pth.tar')
+    # checkpoint_path.append('./checkpoints_9_001/' + modelname + '.pth.tar')
+    # checkpoint_path.append('./model_5_01_lr_1e5_symmetry_good_ec_gc/' + modelname + '.pth.tar')
+    # checkpoint_path.append('./model_5_01_lr_5e6_symmetry_good_ec_gc/' + modelname + '.pth.tar')
+    # checkpoint_path.append('./model_5_01_lr_5e6_symmetry_good_gc/' + modelname + '.pth.tar')
+    # checkpoint_path.append('./model_5_01_lr_5e6_symmetry_good/' + modelname + '.pth.tar')
+    #
+    # modelname = 'model_minimax4'
+    # checkpoint_path.append('./checkpoints_5_01/' + modelname + '.pth.tar')
+    # checkpoint_path.append('./checkpoints_5_001/' + modelname + '.pth.tar')
+    # checkpoint_path.append('./checkpoints_9_001/' + modelname + '.pth.tar')
+    # checkpoint_path.append('./model_5_01_lr_1e5_symmetry_good_ec_gc/' + modelname + '.pth.tar')
+    # checkpoint_path.append('./model_5_01_lr_5e6_symmetry_good_ec_gc/' + modelname + '.pth.tar')
+    # checkpoint_path.append('./model_5_01_lr_5e6_symmetry_good_gc/' + modelname + '.pth.tar')
+    # checkpoint_path.append('./model_5_01_lr_5e6_symmetry_good/' + modelname + '.pth.tar')
+    model_name = 'model_min_error_rate'
+    checkpoint_path.append('./checkpoints/model_5_01_lr_1e5_ec_gc/{}.pth.tar'.format(model_name))
+    checkpoint_path.append('./checkpoints/model_5_01_lr_1e5_symmetry_good_ec_gc/{}.pth.tar'.format(model_name))
+    checkpoint_path.append('./checkpoints/model_5_01_lr_5e6_symmetry_good/{}.pth.tar'.format(model_name))
+    checkpoint_path.append('./checkpoints/model_5_01_lr_5e6_symmetry_good_ec_gc/{}.pth.tar'.format(model_name))
+    checkpoint_path.append('./checkpoints/model_5_01_lr_5e6_symmetry_good_gc/{}.pth.tar'.format(model_name))
+    checkpoint_path.append('./checkpoints/model_5_01_lr_5e6_symmetry_good_pr/{}.pth.tar'.format(model_name))
+    checkpoint_path.append('./checkpoints/model_20_5_01_lr_5e6_symmetry_good/{}.pth.tar'.format(model_name))
+    checkpoint_path.append('./checkpoints/model_20_5_01_lr_5e6_symmetry_good_gc/{}.pth.tar'.format(model_name))
+    checkpoint_path.append('./checkpoints/model_20_5_01_lr_5e6_symmetry_good_gc_pr/{}.pth.tar'.format(model_name))
+    checkpoint_path.append('./checkpoints/model_no_bad_10_5_01_lr_5e6_symmetry_good_gc_pr/{}.pth.tar'.format(model_name))
     models = []
     for i in range(len(checkpoint_path)):
-        models.append(DQN_FCN_WIDE())
+        models.append(DQN_CNN_WIDE_PREDICTION() if i in [5,8,9] else DQN_CNN_WIDE())
         params = load_model(models[i], checkpoint_path[i])
         print(params)
 
@@ -155,4 +165,7 @@ if __name__ == "__main__":
 
     plt.figure()
     plt.imshow(scores)
+    plt.xticks(range(len(checkpoint_path)))
+    plt.yticks(range(len(checkpoint_path)), [p.split('/')[2] for p in checkpoint_path])
+    plt.colorbar(spacing='proportional')
     plt.show()
