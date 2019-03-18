@@ -35,7 +35,7 @@ ACTION_MASK = True
 # Construct prefix
 PREFIX = '{}_{}_{}_lr_{}e{}'.format(LEARNING_ENDS // 1000000, EPS_END // 1000000, EPS, LR_a, LR_b)
 if SYMMETRY:
-    PREFIX += '_symmetry_good'
+    PREFIX += '_symmetry'
 if ERROR_CLIP:
     PREFIX += '_ec'
 if GRAD_CLIP:
@@ -77,22 +77,29 @@ def train_model(game, validation_data=None, validation_labels=None):
             else:
                 return random.choice(np.arange(env.BOARD_W)[action_mask == 1]), False
 
-    # Set stopping criterion
-    def stopping_criterion(t):
-        return t > LEARNING_ENDS
-
     print(" \n \
-        PREFIX {} \n \
-        BATCH_SIZE {} \n \
-        GAMMA {} \n \
-        REPLAY_BUFFER_SIZE {} \n \
-        LEARNING_STARTS {} \n \
-        LEARNING_FREQ {} \n \
-        TARGET_UPDATE_FREQ {} \n \
-        LOG_FREQ {} \n \
-        LEARNING_RATE {} \n \
-        ALPHA {} \n \
-        EPS {}".format(PREFIX, BATCH_SIZE, GAMMA, REPLAY_BUFFER_SIZE, LEARNING_STARTS, LEARNING_FREQ, TARGET_UPDATE_FREQ, LOG_FREQ, LEARNING_RATE, ALPHA, EPS))
+    PREFIX {} \n\
+    REPLAY_BUFFER_SIZE {} \n\
+    LEARNING_STARTS {} \n\
+    LEARNING_ENDS {} \n\
+    GAMMA {} \n\
+    LEARNING_FREQ {} \n\
+    TARGET_UPDATE_FREQ {} \n\
+    LOG_FREQ {} \n\
+    BATCH_SIZE {} \n\
+    LR_a {} \n\
+    LR_b {} \n\
+    LEARNING_RATE {} \n\
+    ALPHA {} \n\
+    EPS {} \n\
+    EPS_END {} \n\
+    SYMMETRY {} \n\
+    ERROR_CLIP {} \n\
+    GRAD_CLIP {} \n\
+    PREDICTION {} \n\
+    ACTION_MASK {}".format(PREFIX, REPLAY_BUFFER_SIZE, LEARNING_STARTS, LEARNING_ENDS, GAMMA, LEARNING_FREQ,
+                           TARGET_UPDATE_FREQ, LOG_FREQ, BATCH_SIZE, LR_a, LR_b, LEARNING_RATE, ALPHA, EPS, EPS_END,
+                           SYMMETRY, ERROR_CLIP, GRAD_CLIP, PREDICTION, ACTION_MASK))
 
     save_path = './checkpoints/model_{}/'.format(PREFIX)
     if not os.path.isdir(save_path):
