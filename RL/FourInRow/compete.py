@@ -1,4 +1,4 @@
-import random
+import os, pickle
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -111,61 +111,62 @@ if __name__ == "__main__":
 
     #checkpoint_path = './model_5_01_lr_5e6_symmetry_good_gc/model_max_wins_6_mask.pth.tar'
     checkpoint_path = []
-    # modelname = 'model_min_error_rate'
-    # checkpoint_path.append('./checkpoints_5_01/' + modelname + '.pth.tar')
-    # checkpoint_path.append('./checkpoints_5_001/' + modelname + '.pth.tar')
-    # checkpoint_path.append('./checkpoints_9_001/' + modelname + '.pth.tar')
-    # checkpoint_path.append('./model_5_01_lr_1e5_symmetry_good_ec_gc/' + modelname + '.pth.tar')
-    # checkpoint_path.append('./model_5_01_lr_5e6_symmetry_good_ec_gc/' + modelname + '.pth.tar')
-    # checkpoint_path.append('./model_5_01_lr_5e6_symmetry_good_gc/' + modelname + '.pth.tar')
-    # checkpoint_path.append('./model_5_01_lr_5e6_symmetry_good/' + modelname + '.pth.tar')
-    #
-    # modelname = 'model_max_wins_6'
-    # checkpoint_path.append('./checkpoints_5_01/' + 'model_max_wins_5' + '.pth.tar')
-    # checkpoint_path.append('./checkpoints_5_001/' + 'model_max_wins_5' + '.pth.tar')
-    # checkpoint_path.append('./checkpoints_9_001/' + modelname + '.pth.tar')
-    # checkpoint_path.append('./model_5_01_lr_1e5_symmetry_good_ec_gc/' + modelname + '.pth.tar')
-    # checkpoint_path.append('./model_5_01_lr_5e6_symmetry_good_ec_gc/' + modelname + '.pth.tar')
-    # checkpoint_path.append('./model_5_01_lr_5e6_symmetry_good_gc/' + modelname + '.pth.tar')
-    # checkpoint_path.append('./model_5_01_lr_5e6_symmetry_good/' + modelname + '.pth.tar')
-    #
-    # modelname = 'model_minimax4'
-    # checkpoint_path.append('./checkpoints_5_01/' + modelname + '.pth.tar')
-    # checkpoint_path.append('./checkpoints_5_001/' + modelname + '.pth.tar')
-    # checkpoint_path.append('./checkpoints_9_001/' + modelname + '.pth.tar')
-    # checkpoint_path.append('./model_5_01_lr_1e5_symmetry_good_ec_gc/' + modelname + '.pth.tar')
-    # checkpoint_path.append('./model_5_01_lr_5e6_symmetry_good_ec_gc/' + modelname + '.pth.tar')
-    # checkpoint_path.append('./model_5_01_lr_5e6_symmetry_good_gc/' + modelname + '.pth.tar')
-    # checkpoint_path.append('./model_5_01_lr_5e6_symmetry_good/' + modelname + '.pth.tar')
-    model_name = 'model_min_error_rate'
-    checkpoint_path.append('./checkpoints/model_5_01_lr_1e5_ec_gc/{}.pth.tar'.format(model_name))
-    checkpoint_path.append('./checkpoints/model_5_01_lr_1e5_symmetry_good_ec_gc/{}.pth.tar'.format(model_name))
-    checkpoint_path.append('./checkpoints/model_5_01_lr_5e6_symmetry_good/{}.pth.tar'.format(model_name))
-    checkpoint_path.append('./checkpoints/model_5_01_lr_5e6_symmetry_good_ec_gc/{}.pth.tar'.format(model_name))
-    checkpoint_path.append('./checkpoints/model_5_01_lr_5e6_symmetry_good_gc/{}.pth.tar'.format(model_name))
-    checkpoint_path.append('./checkpoints/model_5_01_lr_5e6_symmetry_good_pr/{}.pth.tar'.format(model_name))
-    checkpoint_path.append('./checkpoints/model_20_5_01_lr_5e6_symmetry_good/{}.pth.tar'.format(model_name))
-    checkpoint_path.append('./checkpoints/model_20_5_01_lr_5e6_symmetry_good_gc/{}.pth.tar'.format(model_name))
-    checkpoint_path.append('./checkpoints/model_20_5_01_lr_5e6_symmetry_good_gc_pr/{}.pth.tar'.format(model_name))
-    checkpoint_path.append('./checkpoints/model_no_bad_10_5_01_lr_5e6_symmetry_good_gc_pr/{}.pth.tar'.format(model_name))
+    checkpoint_path.append('./checkpoints/model_5_01_lr_1e5_ec_gc/{}.pth.tar'.format('model_min_error_rate'))
+    checkpoint_path.append('./checkpoints/model_5_01_lr_1e5_ec_gc/{}.pth.tar'.format('model_max_wins_5'))
+    checkpoint_path.append('./checkpoints/model_5_01_lr_1e5_symmetry_ec_gc/{}.pth.tar'.format('model_min_error_rate'))
+    checkpoint_path.append('./checkpoints/model_5_01_lr_1e5_symmetry_ec_gc/{}.pth.tar'.format('model_max_wins_6'))
+    checkpoint_path.append('./checkpoints/model_5_01_lr_5e6_symmetry/{}.pth.tar'.format('model_min_error_rate'))
+    checkpoint_path.append('./checkpoints/model_5_01_lr_5e6_symmetry/{}.pth.tar'.format('model_max_wins_6'))
+    checkpoint_path.append('./checkpoints/model_5_01_lr_5e6_symmetry_ec_gc/{}.pth.tar'.format('model_min_error_rate'))
+    checkpoint_path.append('./checkpoints/model_5_01_lr_5e6_symmetry_ec_gc/{}.pth.tar'.format('model_max_wins_6'))
+    checkpoint_path.append('./checkpoints/model_5_01_lr_5e6_symmetry_gc/{}.pth.tar'.format('model_min_error_rate'))
+    checkpoint_path.append('./checkpoints/model_5_01_lr_5e6_symmetry_gc/{}.pth.tar'.format('model_max_wins_6'))
+    checkpoint_path.append('./checkpoints/model_5_01_lr_1e5_symmetry_ec_gc_pr/{}.pth.tar'.format('model_min_error_rate'))
+    checkpoint_path.append('./checkpoints/model_5_01_lr_1e5_symmetry_ec_gc_pr/{}.pth.tar'.format('model_max_wins_6'))
+    checkpoint_path.append('./checkpoints/model_5_01_lr_1e5_symmetry_gc_pr/{}.pth.tar'.format('model_min_error_rate'))
+    checkpoint_path.append('./checkpoints/model_5_01_lr_1e5_symmetry_gc_pr/{}.pth.tar'.format('model_max_wins_6'))
+
+    num_models = len(checkpoint_path)
+    modeltype = ['min_error', 'best_minimax']
     models = []
+    params = []
     for i in range(len(checkpoint_path)):
-        models.append(DQN_CNN_WIDE_PREDICTION() if i in [5,8,9] else DQN_CNN_WIDE())
-        params = load_model(models[i], checkpoint_path[i])
-        print(params)
+        models.append(DQN_CNN_WIDE_PREDICTION() if i in [10,11,12,13] else DQN_CNN_WIDE())
+        params.append(load_model(models[i], checkpoint_path[i]))
+        print(params[i])
 
     env = Game()
 
-    num_models = len(models)
-    scores = np.zeros([num_models, num_models])
+    scores = np.zeros([num_models, num_models+1])
     for i in range(num_models):
         for j in range(i, num_models):
             scores[i, j] = play_game(env, models[i], models[j]) - play_game(env, models[j], models[i])
             scores[j, i] = -scores[i, j]
+    scores[:,num_models] = np.sum(scores[:,:num_models], axis=1) / (num_models-1)
 
-    #plt.figure()
-    mat = plt.matshow(scores)
-    plt.xticks(range(len(checkpoint_path)))
-    plt.yticks(range(len(checkpoint_path)), [p.split('/')[2] for p in checkpoint_path])
+    plt.figure()
+    mat = plt.imshow(scores)
+    plt.xticks(range(num_models))
+    plt.yticks(range(num_models), ['{}: {} ({})'.format(i, p.split('/')[2], modeltype[i % 2]) for i, p in enumerate(checkpoint_path)])
     plt.colorbar(mat, ticks=[-2, -1, 0, 1, 2])
+    for i in range(num_models):
+        plt.text(num_models - 0.3, i, '{:.2f}'.format(scores[i,num_models]), fontsize=12, color='w')
+    plt.title('Play Results')
+    plt.show()
+
+    plt.figure()
+    error = np.zeros([num_models])
+    for i in range(num_models):
+        if i < 2:
+            filename = os.path.join(os.path.split(checkpoint_path[i])[0], 'Statistics.pkl')
+            with open(filename, 'rb') as f:
+                stats = pickle.load(f)
+            error[i] = min([e for e in stats['ERROR_RATE']])
+        else:
+            error[i] = params[i]['stats']['ERROR_RATE']
+    plt.barh(list(reversed(range(num_models))), error)
+    plt.xlabel('validation error')
+    plt.yticks(list(reversed(range(num_models))), ['{}: {} ({})'.format(i, p.split('/')[2], modeltype[i % 2]) for i, p in enumerate(checkpoint_path)])
+    plt.title('Validation Error')
+    plt.grid()
     plt.show()
