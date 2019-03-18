@@ -2,3 +2,7 @@
 *.pyc
 data/
 checkpoints/
+
+# FourInRow
+*/FourInRow/plots/
+*/FourInRow/images/
