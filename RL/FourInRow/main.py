@@ -7,7 +7,7 @@ import torch.optim as optim
 from model import DQN_CNN, DQN_CNN_WIDE, DQN_CNN_WIDE_PREDICTION, DQN_LINEAR, DQN_SKIP, DQN_SKIP_WIDE
 from dqn_train import DQNLearning
 from dqn_train import OptimizerSpec
-from utils_game import Game
+from utils_game import Game, BOARD_W, BOARD_H
 from utils_data import load_end_game_data
 from utils_schedule import LinearSchedule
 from utils_plot import plot_stats
@@ -52,8 +52,6 @@ dtype = torch.cuda.FloatTensor if torch.cuda.is_available() else torch.FloatTens
 
 
 def train_model(game, validation_data=None, validation_labels=None):
-    env = game()
-
     # Define optimizer for the model
     optimizer_spec = OptimizerSpec(
         constructor=optim.Adam,
@@ -73,9 +71,9 @@ def train_model(game, validation_data=None, validation_labels=None):
             return action.data.max(dim=1)[1].cpu().numpy(), True
         else:
             if action_mask is None:
-                return np.random.choice(np.arange(env.BOARD_W)), False
+                return np.random.choice(np.arange(BOARD_W)), False
             else:
-                return random.choice(np.arange(env.BOARD_W)[action_mask == 1]), False
+                return random.choice(np.arange(BOARD_W)[action_mask == 1]), False
 
     print(" \n \
     PREFIX {} \n\
@@ -131,6 +129,8 @@ def train_model(game, validation_data=None, validation_labels=None):
 
     # Plot and save stats
     plot_path = './plots/'
+    if not os.path.isdir(plot_path):
+        os.mkdir(plot_path)
     plot_stats(statistics, path=plot_path, prefix=PREFIX+'_')
 
 
@@ -138,22 +138,7 @@ if __name__ == '__main__':
     # Load validation set
     DATA_SIZE = 1000
     # Temporal swap until recollection
-    #data, labels, win_labels, lose_labels = load_end_game_data(1000)
-    data, labels, lose_labels, win_labels = load_end_game_data(1000)
-    for n in range(labels.shape[0]):
-        if any(win_labels[n,:]):
-            labels[n, :] = win_labels[n,:]
-        else:
-            labels[n, :] = lose_labels[n,:]
-    # Split train-test
-    #val_data = data[TRAIN_SIZE:, :, :, :]
-    #train_win_labels = win_labels[:TRAIN_SIZE, :]
-    #train_lose_labels = lose_labels[:TRAIN_SIZE, :]
-    #val_win_labels = win_labels[TRAIN_SIZE:, :]
-    #val_lose_labels = lose_labels[TRAIN_SIZE:, :]
-
-    #train_labels = labels[:TRAIN_SIZE, :]
-    #val_labels = labels[DATA_SIZE:, :]
+    data, labels, _, _ = load_end_game_data(DATA_SIZE)
 
     # Run training
     game = Game

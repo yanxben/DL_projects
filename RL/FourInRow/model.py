@@ -2,27 +2,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-import numpy
-
-
-class DQN_CNN_WIDE_PADDING(nn.Module):
-    def __init__(self):
-        super(DQN_CNN_WIDE, self).__init__()
-        self.conv1 = nn.Conv2d(2, 64, 3, stride=1)  # 7x6 -> 5x4
-        self.conv2 = nn.Conv2d(64, 256, 3, stride=1)  # 5x4 -> 3x2
-        self.linear4 = nn.Linear(256*3*2, 2048)
-        self.linear5 = nn.Linear(2048, 512)
-        self.linear6 = nn.Linear(512, 7)
-
-    def forward(self, X):
-        o1 = F.relu(self.conv1(X))
-        o2 = F.relu(self.conv2(o1))
-        o4 = o2.view(-1, 256*3*2)
-        o5 = F.relu(self.linear4(o4))
-        o6 = F.relu(self.linear5(o5))
-        o7 = self.linear6(o6)
-        return o7
-
 
 class DQN_CNN(nn.Module):
     def __init__(self):
@@ -89,9 +68,9 @@ class DQN_CNN_WIDE_PREDICTION(nn.Module):
         return o7
 
 
-class DQN_FCN_VERY_WIDE(nn.Module):
+class DQN_CNN_VERY_WIDE(nn.Module):
     def __init__(self):
-        super(DQN_FCN_VERY_WIDE, self).__init__()
+        super(DQN_CNN_VERY_WIDE, self).__init__()
         self.conv1 = nn.Conv2d(2, 128, 3, stride=1)  # 7x6 -> 5x4
         self.conv2 = nn.Conv2d(128, 512, 3, stride=1)  # 5x4 -> 3x2
         self.linear4 = nn.Linear(512*3*2, 2048)
@@ -102,7 +81,6 @@ class DQN_FCN_VERY_WIDE(nn.Module):
     def forward(self, X):
         o1 = F.relu(self.conv1(X))
         o2 = F.relu(self.conv2(o1))
-
         o4 = o2.view(-1, 512*3*2)
         o5 = F.relu(self.linear4(o4))
         o6 = F.relu(self.linear5(o5))

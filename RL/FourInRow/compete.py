@@ -108,8 +108,6 @@ def play_game(env, Q1, Q2, plt_flag=False):
 
 if __name__ == "__main__":
 
-
-    #checkpoint_path = './model_5_01_lr_5e6_symmetry_good_gc/model_max_wins_6_mask.pth.tar'
     checkpoint_path = []
     checkpoint_path.append('./checkpoints/model_5_01_lr_1e5_ec_gc/{}.pth.tar'.format('model_min_error_rate'))
     checkpoint_path.append('./checkpoints/model_5_01_lr_1e5_ec_gc/{}.pth.tar'.format('model_max_wins_5'))
@@ -131,7 +129,7 @@ if __name__ == "__main__":
     models = []
     params = []
     for i in range(len(checkpoint_path)):
-        models.append(DQN_CNN_WIDE_PREDICTION() if i in [10,11,12,13] else DQN_CNN_WIDE())
+        models.append(DQN_CNN_WIDE_PREDICTION() if i in [10,11,12,13] else DQN_CNN_WIDE())  # update if necessary
         params.append(load_model(models[i], checkpoint_path[i]))
         print(params[i])
 
@@ -146,6 +144,7 @@ if __name__ == "__main__":
 
     plt.figure()
     mat = plt.imshow(scores)
+    plt.axvline(x=13.5, color='w')
     plt.xticks(range(num_models))
     plt.yticks(range(num_models), ['{}: {} ({})'.format(i, p.split('/')[2], modeltype[i % 2]) for i, p in enumerate(checkpoint_path)])
     plt.colorbar(mat, ticks=[-2, -1, 0, 1, 2])
@@ -157,7 +156,7 @@ if __name__ == "__main__":
     plt.figure()
     error = np.zeros([num_models])
     for i in range(num_models):
-        if i < 2:
+        if i < 2:  # update if necessary
             filename = os.path.join(os.path.split(checkpoint_path[i])[0], 'Statistics.pkl')
             with open(filename, 'rb') as f:
                 stats = pickle.load(f)

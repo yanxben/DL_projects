@@ -1,28 +1,15 @@
 import os
 import time
 import shutil
-#import random
 
-#import imageio
-#import torch
 import numpy as np
-import pandas as pd
-#from skimage import img_as_float, img_as_ubyte
-
-#from fetch_data import _get_negative_imagepaths, _image_to_array, fetch_negative_mining
-#from image_utils import channels_last2first, channels_first2last
-#from model import Classifier12FCN
-#from train_utils import load_model
-#from skimage.transform import rescale
 
 from utils_game import Game, _check_final_step
-
-data_dir = os.path.join(os.getcwd(), 'data')
-
+from utils_data import save_end_game_data
 BOARD_W, BOARD_H = 7, 6
 
 
-def create_images(outdir, DATA_SIZE=100000):
+def create_images(outdir=None, DATA_SIZE=100000):
 
     print("Creating data...")
     game = Game()
@@ -49,23 +36,16 @@ def create_images(outdir, DATA_SIZE=100000):
 
     data = data.reshape([DATA_SIZE, -1])
 
-    print("Saving to file...")
-    data_df = pd.DataFrame(data)
-    data_df.to_csv(os.path.join(outdir, 'images_df.csv'))
-    labels_df = pd.DataFrame(labels)
-    labels_df.to_csv(os.path.join(outdir, 'labels_df.csv'))
-    win_labels_df = pd.DataFrame(win_labels)
-    win_labels_df.to_csv(os.path.join(outdir, 'win_labels_df.csv'))
-    lose_labels_df = pd.DataFrame(lose_labels)
-    lose_labels_df.to_csv(os.path.join(outdir, 'lose_labels_df.csv'))
-    #np.savetxt(os.path.join(outdir, 'images.csv'), data, delimiter=',')
-    #np.savetxt(os.path.join(outdir, 'labels.csv'), labels, delimiter=',')
-    #np.savetxt(os.path.join(outdir, 'win_labels.csv'), win_labels, delimiter=',')
-    #np.savetxt(os.path.join(outdir, 'lose_labels.csv'), lose_labels, delimiter=',')
+    if outdir is not None:
+        print("Saving to file...")
+        save_end_game_data(data, labels, win_labels, lose_labels, outdir)
+
+    return data, labels, win_labels, lose_labels
 
 
 if __name__ == '__main__':
-    data_path = os.path.join(data_dir, "supervised_images_2")
+    data_dir = os.path.join(os.getcwd(), 'data')
+    data_path = os.path.join(data_dir, "supervised_images")
     if os.path.isdir(data_path):
         shutil.rmtree(data_path)
 
@@ -74,4 +54,4 @@ if __name__ == '__main__':
 
     print(os.getcwd())
     print(data_path)
-    create_images(data_path, 1000)
+    create_images(data_path)

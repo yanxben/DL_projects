@@ -1,7 +1,4 @@
-import os, sys, time
-
 import numpy as np
-import pandas as pd
 import matplotlib.pyplot as plt
 
 import torch
@@ -10,11 +7,11 @@ import torch.nn as nn
 from torch.autograd import Variable
 
 from model import DQN_CNN, DQN_CNN_WIDE, DQN_LINEAR, DQN_SKIP, DQN_SKIP_WIDE
-from utils_game import Game, _check_final_step
-from utils_plot import plot_state
 from utils_data import load_end_game_data
+from create_examples import create_images
 
 CREATE_DATA = False
+data_save_dir = None
 DATA_SIZE = 100000
 TRAIN_SIZE = int(0.9 * DATA_SIZE)
 BOARD_W, BOARD_H = 7, 6
@@ -39,32 +36,11 @@ def main():
     # Get dataset
     if CREATE_DATA:
         print("Creating data...")
-        game = Game()
-        data = np.ndarray([DATA_SIZE, 3, BOARD_H, BOARD_W])
-        win_labels = np.ndarray([DATA_SIZE, BOARD_W])
-        lose_labels = np.ndarray([DATA_SIZE, BOARD_W])
-        labels = np.ndarray([DATA_SIZE, BOARD_W])
-        for n in range(DATA_SIZE):
-
-            win_actions, lose_actions = [0] * BOARD_W, [0] * BOARD_W
-            while not (any(win_actions) or any(lose_actions)):
-                state, _, _ = game.rand_state()
-                win_actions, lose_actions = _check_final_step(state)
-
-            if any(win_actions) or any(lose_actions):
-                data[n, :, :, :] = state.transpose([2, 0, 1])
-                win_labels[n, :] = win_actions
-                lose_labels[n, :] = lose_actions
-                if any(win_actions):
-                    labels[n, :] = win_actions
-                else:
-                    labels[n, :] = lose_actions
+        data, labels, win_labels, lose_labels = create_images(data_save_dir, DATA_SIZE=DATA_SIZE)
     else:
         print("Loading data...")
         # Temporary swap until recollect data
-        #data, labels, win_labels, lose_labels = load_end_game_data(DATA_SIZE)
-        data, labels, lose_labels, win_labels = load_end_game_data(DATA_SIZE)
-
+        data, labels, win_labels, lose_labels = load_end_game_data(DATA_SIZE)
 
     plt.figure()
     for i in range(5):
@@ -75,10 +51,6 @@ def main():
     # Split train-test
     train_data = data[:TRAIN_SIZE]
     val_data = data[TRAIN_SIZE:]
-    train_win_labels = win_labels[:TRAIN_SIZE]
-    train_lose_labels = lose_labels[:TRAIN_SIZE]
-    val_win_labels = win_labels[TRAIN_SIZE:]
-    val_lose_labels = lose_labels[TRAIN_SIZE:]
 
     train_labels = labels[:TRAIN_SIZE]
     val_labels = labels[TRAIN_SIZE:]
@@ -101,25 +73,9 @@ def main():
 
     plot_learning_curve(learning_curve, train_sizes, model_names)
 
-    # plt.figure()
-    # with torch.no_grad():
-    #     images = torch.Tensor(val_data[:25, :, :, :]).type(dtype)
-    #     actions = model(images[:,:2,:,:])
-    #     actions = np.argmax(actions.cpu().detach().numpy(), axis=1)
-    #
-    #     for i in range(5):
-    #         for j in range(5):
-    #             plt.subplot(5, 5, i * 5 + j + 1)
-    #             plot_state(val_data[i*5 + j, :, :, :].transpose([1,2,0]), win_actions=val_win_labels[i*5+j, :], lose_actions=val_lose_labels[i*5+j, :], action=actions[i*5+j])
-    #
-    # os.getcwd()
-    # plt.show()
-
 
 def train(model, optimizer, criterion, train_data, train_labels, val_data, val_labels):
     batch_epoch = 0
-    min_loss = (1, 0)
-    exit_flag = False
     learning_curve = []
 
     train_size = train_data.shape[0]
@@ -150,44 +106,30 @@ def train(model, optimizer, criterion, train_data, train_labels, val_data, val_l
             optimizer.step()  # Update the weights according to the computed gradient
 
             # Plot average train loss across 10 batches and validation loss
-            if not batch_epoch % 10:
+            if not batch_epoch % 100:
 
                 # Calculate validation loss
-                val_error = -1
-                if not batch_epoch % 100:
-                    with torch.no_grad():
-                        val_data_tensor = torch.Tensor(val_data).type(dtype)
-                        val_labels_tensor = torch.Tensor(val_labels).type(dtype)
-                        val_actions = model(val_data_tensor[:,:2,:,:])
-                        val_error = evaluate(val_actions, val_labels, True)
-                        #validation_stats.append((batch_epoch, val_error))
+                with torch.no_grad():
+                    val_data_tensor = torch.Tensor(val_data).type(dtype)
+                    val_actions = model(val_data_tensor[:,:2,:,:])
+                    val_error = evaluate(val_actions, val_labels, True)
 
-                        # Average train loss over 100 batches for stability
-                        learning_curve.append((batch_epoch, running_error / 100, val_error))
-                        running_error = 0
+                    # Average train loss over 100 batches for stability
+                    learning_curve.append((batch_epoch, running_error / 100, val_error))
+                    running_error = 0
 
-                # Plot every 10 batches
-                if val_error >= 0:
-                    print(
-                        'Epoch: {:2d} Batch: {:3d} Loss: {:.5f} Error: {:.5f} Validation Error: {:.5f}'
-                        .format(epoch, batch_epoch, batch_loss, batch_error, val_error)
-                    )
-                #else:
-                #    print(
-                #        'Epoch: {:2d} Batch: {:3d} Loss: {:.5f} Error: {:.5f}'
-                #        .format(epoch, batch_epoch, error.item(), batch_error)
-                #    )
+                # Plot every 100 batches
+                print(
+                    'Epoch: {:2d} Batch: {:3d} Loss: {:.5f} Error: {:.5f} Validation Error: {:.5f}'
+                    .format(epoch, batch_epoch, batch_loss, batch_error, val_error)
+                )
 
-    return learning_curve  #, validation_stats
+    return learning_curve
 
 
-def evaluate(actions, labels, dist=False):
+def evaluate(actions, labels):
     action_argmax = np.argmax(actions.cpu().detach().numpy(), axis=1)
     labels_argmax = np.array([ [labels[i, action_argmax[i]]] for i in range(labels.shape[0]) ])
-    if dist:
-        #print(np.sum(labels, axis=0))
-        action_dist = [sum(action_argmax == i) for i in range(BOARD_W)]
-        #print(action_dist)
     error_rate = np.mean(1 - labels_argmax)
     return error_rate
 
@@ -221,26 +163,6 @@ def plot_learning_curve(learning_curve, data_sizes, model_names):
     plt.grid()
     plt.show()
     plt.savefig('supervised.png')
-    #pos = ['left', 'center', 'right']
-    #[autolabel(rects[i], pos[i]) for i in range(len(rects))]
-
-
-def autolabel(rects, xpos='center'):
-    """
-    Attach a text label above each bar in *rects*, displaying its height.
-
-    *xpos* indicates which side to place the text w.r.t. the center of
-    the bar. It can be one of the following {'center', 'right', 'left'}.
-    """
-
-    xpos = xpos.lower()  # normalize the case of the parameter
-    ha = {'center': 'center', 'right': 'left', 'left': 'right'}
-    offset = {'center': 0.5, 'right': 0.57, 'left': 0.43}  # x_txt = x + w*off
-
-    for rect in rects:
-        height = rect.get_height()
-        ax.text(rect.get_x() + rect.get_width() * offset[xpos], 1.01 * height,
-                '{}'.format(height), ha=ha[xpos], va='bottom')
 
 
 if __name__ == "__main__":

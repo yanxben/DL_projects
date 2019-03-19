@@ -96,9 +96,6 @@ class Game:
                 else:
                     find_final = True
 
-            #plt.imshow(self.state)
-            #plt.title(stage)
-            #plt.show(block=False)
             stage += 1
 
             action_list = []
@@ -145,9 +142,8 @@ def _get_action(state, col):
     return (row, col)
 
 
-def _sim_step(old_state, col, old_turn=None, player=0):
+def _sim_step(old_state, col, player=0):
     new_state = old_state.copy()
-    #new_turn = old_turn + 1
 
     if not _valid_action(new_state, col):
         done = 1
@@ -181,67 +177,35 @@ def _obs2state(obs):
     return state
 
 
-def _game_end(state, last_action=None, debug=False):
-    if debug:
-        plt.imshow(state)
-        plt.grid()
-        plt.show(block=False)
-        time.sleep(0.2)
-
+def _game_end(state, last_action=None):
     if last_action is not None:
         player = np.argmax(state[last_action[0], last_action[1], 0:2])
         player_state = state[:, :, player].copy()
-        if debug:
-            print('last action: {}' .format(last_action))
         # Check column
-        if debug:
-            print('Column')
         offsets = np.array(range(4))
         if last_action[0] >= 3:
-            if debug:
-                print([last_action[0] - offsets, last_action[1]])
             if all(player_state[last_action[0] - offsets, last_action[1]] > 0):
                 return True
         # Check row
-        if debug:
-            print('Row')
         offsets = np.array(range(4))
         for shift in range(4):
-            if debug:
-                print([last_action[0], last_action[1] + offsets - shift])
             if all(last_action[1] + offsets - shift >= 0) and all(last_action[1] + offsets - shift < BOARD_W):
                 if all(player_state[last_action[0], last_action[1] + offsets - shift] > 0):
                     return True
         # Check rising diagonal
-        #print('Diag 1')
         offsets = np.array(range(4))
         for shift in range(4):
-            #print([last_action[0] + offsets - shift, last_action[1] + offsets - shift])
             if all(last_action[1] + offsets - shift >= 0) and all(last_action[1] + offsets - shift < BOARD_W) and \
                     all(last_action[0] + offsets - shift >= 0) and all(last_action[0] + offsets - shift < BOARD_H):
-                #print(player_state[last_action[0] + offsets - shift, last_action[1] + offsets - shift])
                 if all(player_state[last_action[0] + offsets - shift, last_action[1] + offsets - shift] > 0):
-                    #print('END')
                     return True
-                #else:
-                #    print('PASS')
-            #else:
-                #print('OUT')
         # Check decreasing diagonal
-        #print('Diag 2')
         offsets = np.array(range(4))
         for shift in range(4):
-            #print([last_action[0] - offsets + shift, last_action[1] + offsets - shift])
             if all(last_action[1] + offsets - shift >= 0) and all(last_action[1] + offsets - shift < BOARD_W) and \
                     all(last_action[0] - offsets + shift >= 0) and all(last_action[0] - offsets + shift < BOARD_H):
-                #print(player_state[last_action[0] - offsets + shift, last_action[1] + offsets - shift])
                 if all(player_state[last_action[0] - offsets + shift, last_action[1] + offsets - shift] > 0):
-                    #print('END')
                     return True
-                #else:
-                    #print('PASS')
-            #else:
-                #print('OUT')
         return False
     else:
         for i in range(BOARD_W):
@@ -291,5 +255,4 @@ if __name__ == "__main__":
             win_actions, lose_actions = _check_final_step(state)
             plot_state(state, stage, win_actions, lose_actions)
 
-    plt.show()
     plt.show()

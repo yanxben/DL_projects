@@ -1,4 +1,4 @@
-import random
+import random, time
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -60,8 +60,12 @@ def play_game(env, Q):
                 # Get opponent action
                 opponent_obs = env.swap_state(player=1)[:, :, :2]
                 opponent_input_to_dqn = torch.from_numpy(opponent_obs.transpose(2, 0, 1)).type(dtype).unsqueeze(0)
+
+                tic = time.perf_counter()
                 with torch.no_grad():
                     action = Q(opponent_input_to_dqn).data.max(dim=1)[1].cpu().numpy()
+                print('time: {}'.format(time.perf_counter() - tic))
+
                 obs, reward, done, _ = env.step(action)
                 if done:
                     if reward > 0:
@@ -93,23 +97,13 @@ if __name__ == "__main__":
 
     env = Game()
 
-    Q1 = DQN_CNN_WIDE()
-    Q2 = DQN_CNN_WIDE()
-    Q3 = DQN_CNN_WIDE()
-    #checkpoint_path = './model_5_01_lr_5e6_symmetry_good_gc/model_max_wins_6_mask.pth.tar'
+    Q = DQN_CNN_WIDE()
     model = 'model_min_error_rate'
-    checkpoint_path1 = './model_5_01_lr_5e6_symmetry_good_ec_gc/' + model + '.pth.tar'
-    checkpoint_path2 = './model_5_01_lr_5e6_symmetry_good_gc/' + model + '.pth.tar'
-    checkpoint_path3 = './model_5_01_lr_5e6_symmetry_good/' + model + '.pth.tar'
-    params = load_model(Q1, checkpoint_path1)
-    print(params)
-    params = load_model(Q2, checkpoint_path2)
-    print(params)
-    params = load_model(Q3, checkpoint_path3)
+    checkpoint_path1 = './checkpoints/model_5_01_lr_5e6_symmetry_ec_gc/' + model + '.pth.tar'
+    params = load_model(Q, checkpoint_path1)
     print(params)
 
     def policy(obs):
-        return (Q1(obs) + Q2(obs) + Q3(obs)) / 3
-
+        return Q(obs)
 
     play_game(env, policy)

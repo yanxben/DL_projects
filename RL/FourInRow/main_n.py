@@ -3,14 +3,13 @@ import os, random
 import torch
 import torch.optim as optim
 
-from model import DQN_FCN, DQN_FCN_WIDE, DQN_LINEAR, DQN_SKIP
-from dqn_train import DQNLearning3
+from model import DQN_CNN, DQN_CNN_WIDE, DQN_LINEAR, DQN_SKIP
+from dqn_train_n import DQNLearningN
 from dqn_train import OptimizerSpec
-from utils_game import Game
+from utils_game import Game, BOARD_W, BOARD_H
 from utils_data import load_end_game_data
 from utils_schedule import LinearSchedule, ConstSchedule
 from utils_plot import plot_stats, plot_state
-from play import play_game
 
 REPLAY_BUFFER_SIZE = 10000
 LEARNING_STARTS = 10000
@@ -79,10 +78,6 @@ def train_model(game, validation_data=None, validation_labels=None):
         else:
             return random.randint(0, env.BOARD_W-1), False
 
-    # Set stopping criterion
-    def stopping_criterion(t):
-        return t > LEARNING_ENDS
-
     print(" \n \
         PREFIX {} \n \
         BATCH_SIZE {} \n \
@@ -96,20 +91,17 @@ def train_model(game, validation_data=None, validation_labels=None):
         ALPHA {} \n \
         EPS {}".format(PREFIX, BATCH_SIZE, GAMMA, REPLAY_BUFFER_SIZE, LEARNING_STARTS, LEARNING_FREQ, TARGET_UPDATE_FREQ, LOG_FREQ, LEARNING_RATE, ALPHA, EPS))
 
-    # Save configurations to txt file
-    # TODO
-
     num_models = len(PREFIX)
-    load_paths = ['./model_{}/{}.pth.tar'.format(p, MODELNAME) for p in PREFIX]
-    save_paths = ['./model_{}_X/'.format(p) for p in PREFIX]
+    load_paths = ['./checkpoints/model_{}/{}.pth.tar'.format(p, MODELNAME) for p in PREFIX]
+    save_paths = ['./checkpoints/model_{}_X/'.format(p) for p in PREFIX]
 
     for i in range(num_models):
         if not os.path.isdir(save_paths[i]):
             os.mkdir(save_paths[i])
 
-    Q, statistics = DQNLearning3(
+    Q, statistics = DQNLearningN(
         game=game,
-        q_func=DQN_FCN_WIDE,
+        q_func=DQN_CNN_WIDE,
         optimizer_spec=optimizer_spec,
         policy_func=epsilon_greedy_policy,
         replay_buffer_size=REPLAY_BUFFER_SIZE,
@@ -131,29 +123,19 @@ def train_model(game, validation_data=None, validation_labels=None):
     )
 
     # Plot and save stats
+    plot_path = './plots/'
+    if not os.path.isdir(plot_path):
+        os.mkdir(plot_path)
     for n in range(num_models):
-        plot_stats(statistics[n], path=save_paths[n], prefix=PREFIX+'_X_')
+        plot_stats(statistics[n], path=plot_path, prefix=PREFIX[n]+'_X_')
 
 
 if __name__ == '__main__':
-    # Get Atari games.
-    # Change the index to select a different game.
-    #task = benchmark.tasks[3]
-
     # Load validation set
     DATA_SIZE = 1000
     # Temporal swap until recollection
-    #data, labels, win_labels, lose_labels = load_end_game_data(1000)
-    data, labels, lose_labels, win_labels = load_end_game_data(1000)
-    for n in range(labels.shape[0]):
-        if any(win_labels[n, :]):
-            labels[n, :] = win_labels[n, :]
-        else:
-            labels[n, :] = lose_labels[n, :]
+    data, labels, _, _ = load_end_game_data(DATA_SIZE)
 
-
-    # Run training
-    #seed = 0 # Use a seed of zero (you may want to randomize the seed!)
     game = Game
 
     train_model(game, data, labels)
