@@ -91,16 +91,17 @@ def play_game(env, Q):
 
 
 if __name__ == "__main__":
-    from model import DQN_CNN_WIDE
+    from model import DQN_CNN_WIDE_PREDICTION
     from utils_save import load_model
     from utils_game import Game
 
     env = Game()
 
-    Q = DQN_CNN_WIDE()
-    model = 'model_min_error_rate'
-    checkpoint_path1 = './checkpoints/model_5_01_lr_5e6_symmetry_ec_gc/' + model + '.pth.tar'
-    params = load_model(Q, checkpoint_path1)
+    Q = DQN_CNN_WIDE_PREDICTION()
+    model_path = './best_model/'
+    model = 'best_model'
+    checkpoint_path = model_path + model + '.pth.tar'
+    params = load_model(Q, checkpoint_path)
     print(params)
 
     def policy(obs):
