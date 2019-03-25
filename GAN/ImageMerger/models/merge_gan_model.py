@@ -90,7 +90,7 @@ class mergeganmodel(BaseModel):
         if self.isTrain:  # define discriminator
             #self.netD = networks.define_D(opt.output_nc, opt.ndf, opt.netD,
             #                                opt.n_layers_D, opt.norm, opt.init_type, opt.init_gain, self.gpu_ids)
-            self.netD = encoder_decoder.Discriminator(opt.input_nc, opt.last_conv_nc, opt.size).to(self.device)
+            self.netD = encoder_decoder.Discriminator(opt.input_nc, opt.last_conv_nc, opt.input_size).to(self.device)
 
         if self.isTrain:
             if False:  #self.opt.use_pool and False:
