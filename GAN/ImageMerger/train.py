@@ -27,7 +27,7 @@ import matplotlib.pyplot as plt
 import torch
 #from util.visualizer import Visualizer
 
-testset = [0, 4, 5, 6, 206, 210, 213, 405, 407, 435]
+testset = list(range(10)) # [0, 4, 5, 6, 206, 210, 213, 405, 407, 435]
 if __name__ == '__main__':
     opt = TrainOptions().parse()   # get training options
     dataset, stl10_data = create_dataset_stl10_bird(opt)  # create a dataset given opt.dataset_mode and other options
