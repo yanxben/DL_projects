@@ -1,58 +1,60 @@
 import os
+import json
 import numpy as np
 import matplotlib.pyplot as plt
 from skimage.draw import line_aa, polygon
 from skimage.io import imsave
 
 coords = []
-done = False
-i = 0
+idx = None
+n_idx = 0
+i_idx = 0
 
-def mask_image(images, path):
+# def mask_image(images, path):
+#     def onclick(event):
+#         ix, iy = event.xdata, event.ydata
+#         print('x = {}, y = {}'.format(ix, iy))
+#
+#         global coords, done
+#         coords.append([ix, iy])
+#
+#         plt.scatter(ix, iy, marker='.')
+#
+#         if len(coords) > 1:
+#             plt.plot((ix, coords[-2][0]), (iy, coords[-2][1]), 'b')
+#             if l1_dist([ix, iy], coords[0]) < 1:
+#                 coords.pop()
+#                 done = True
+#
+#         plt.pause(0.001)
+#
+#     fig = plt.figure()
+#
+#     for i in range(images.shape[0]):
+#         # Show image
+#         plt.imshow(images[i])
+#         plt.pause(0.001)
+#         # Collect coordinates
+#         global coords, done
+#         coords = []
+#         done = False
+#
+#         cid = fig.canvas.mpl_connect('button_press_event', onclick)
+#         while not done:
+#             1 + 1
+#
+#         fig.canvas.mpl_disconnect(cid)
+#         plt.cla()
+#
+#         if len(coords) >= 3:
+#             create_mask(images.shape[1:], coords, os.path.join(path, 'image_{}.png'.format(i)))
+
+
+def mask_image(images, path, type):
     def onclick(event):
+        global coords, idx, n_idx, i_idx
         ix, iy = event.xdata, event.ydata
-        print('x = {}, y = {}'.format(ix, iy))
-
-        global coords, done
-        coords.append([ix, iy])
-
-        plt.scatter(ix, iy, marker='.')
-
-        if len(coords) > 1:
-            plt.plot((ix, coords[-2][0]), (iy, coords[-2][1]), 'b')
-            if l1_dist([ix, iy], coords[0]) < 1:
-                coords.pop()
-                done = True
-
-        plt.pause(0.001)
-
-    fig = plt.figure()
-
-    for i in range(images.shape[0]):
-        # Show image
-        plt.imshow(images[i])
-        plt.pause(0.001)
-        # Collect coordinates
-        global coords, done
-        coords = []
-        done = False
-
-        cid = fig.canvas.mpl_connect('button_press_event', onclick)
-        while not done:
-            1 + 1
-
-        fig.canvas.mpl_disconnect(cid)
-        plt.cla()
-
-        if len(coords) >= 3:
-            create_mask(images.shape[1:], coords, os.path.join(path, 'image_{}.png'.format(i)))
-
-
-def mask_image2(images, path):
-    def onclick(event):
-        global coords, i
-        ix, iy = event.xdata, event.ydata
-        print('image {} -- x = {}, y = {}'.format(i, ix, iy), end='\r')
+        print('image {} -- x = {}, y = {}'.format(idx[0], ix, iy), end='\r')
 
         coords.append([ix, iy])
 
@@ -64,29 +66,38 @@ def mask_image2(images, path):
             if l1_dist([ix, iy], coords[0]) < 3:
                 coords.pop()
 
-                create_mask(images.shape[1:3], coords, os.path.join(path, 'image_{}.png'.format(i)))
+                create_mask(images.shape[1:3], coords, os.path.join(path, type, 'image_{}.png'.format(idx[0])))
 
-                i += 1
                 coords = []
 
-                if i >= images.shape[0]:
+                if len(idx) == 0:
                     fig.canvas.mpl_disconnect(cid)
                 else:
+                    idx.pop(0)
+                    i_idx += 1
                     plt.cla()
-                    plt.imshow(images[i])
-                    plt.title('image {}'.format(i))
-                    #plt.pause(0.001)
+                    plt.imshow(images[idx[0]])
+                    plt.title('image {} {}/{}'.format(idx[0], i_idx, n_idx))
 
         plt.show(block=False)
-        #plt.pause(0.001)
 
     fig = plt.figure()
 
     # Show image
-    global i
-    plt.imshow(images[i])
+    global i, idx, n_idx, i_idx
+
+    idx_path = os.path.join(path, type + '.json')
+    with open(idx_path, 'r') as f:
+        idx = json.load(f)
+        n_idx = len(idx)
+
+    while i > idx[0]:
+        idx.pop(0)
+        i_idx += 1
+
+    plt.imshow(images[idx[0]])
+    plt.title('image {} {}/{}'.format(idx[0], i_idx, n_idx))
     plt.show(block=False)
-    #plt.pause(0.001)
 
     cid = fig.canvas.mpl_connect('button_press_event', onclick)
 
@@ -115,11 +126,13 @@ if __name__ == '__main__':
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--stlpath', dest='stlpath', required=False, default='C:/Datasets',
+    parser.add_argument('--stl_path', required=False, default='C:/Datasets',
                         help='path to STL10 dataset')
-    parser.add_argument('--maskpath', dest='maskpath', required=False, default='C:/Datasets/masks/stl10_birds',
+    parser.add_argument('--stl_type', required=False, default='test',
+                        help='path to STL10 dataset')
+    parser.add_argument('--mask_path', required=False, default='C:/Datasets/masks/stl10_birds',
                         help='path to folder where to save masks')
-    parser.add_argument('--i0', type=int, dest='i0', required=False, default=0,
+    parser.add_argument('--i0', type=int, dest='i0', required=False, default=163,
                         help='index of starting image')
     parser.set_defaults(feature=True)
     args = parser.parse_args()
@@ -128,7 +141,9 @@ if __name__ == '__main__':
 
     i = args.i0
 
-    stl10_train = torchvision.datasets.STL10(args.stlpath, split='train', download=False)
-    stl10_bird = stl10_train.data[[label == 1 for label in stl10_train.labels]]
-    mask_image2(stl10_bird.transpose((0, 2, 3, 1)), path=args.maskpath)
+    stl10_data = torchvision.datasets.STL10(args.stl_path, split=args.stl_type, download=False)
+    stl10_bird = stl10_data.data[[label == 1 for label in stl10_data.labels]]
+    mask_image(stl10_bird.transpose((0, 2, 3, 1)),
+                path=args.mask_path,
+                type=args.stl_type)
     plt.show()
