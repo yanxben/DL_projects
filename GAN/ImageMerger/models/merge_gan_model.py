@@ -44,15 +44,26 @@ class mergeganmodel(BaseModel):
             parser.add_argument('--last_conv_nc', type=int, default=512, help='')
             parser.add_argument('--lambda_G1', type=float, default=1.0, help='weight for cycle loss (A -> B -> A)')
             parser.add_argument('--lambda_G2', type=float, default=1.0, help='weight for cycle loss (B -> A -> B)')
-            parser.add_argument('--lambda_Background', type=float, default=0.3, help='use background mapping. Setting lambda_identity other than 0 has an effect of scaling the weight of the identity mapping loss. For example, if the weight of the identity loss should be 10 times smaller than the weight of the reconstruction loss, please set lambda_identity = 0.1')
+            parser.add_argument('--lambda_Background', type=float, default=0.4, help='use background mapping. Setting lambda_identity other than 0 has an effect of scaling the weight of the identity mapping loss. For example, if the weight of the identity loss should be 10 times smaller than the weight of the reconstruction loss, please set lambda_identity = 0.1')
             parser.add_argument('--background', action='store_false',
                                 help='use background')
-            parser.add_argument('--lambda_Identity', type=float, default=0.1,
+            parser.add_argument('--lambda_Identity', type=float, default=1.0,
                                 help='use identity mapping. Setting lambda_identity other than 0 has an effect of scaling the weight of the identity mapping loss. For example, if the weight of the identity loss should be 10 times smaller than the weight of the reconstruction loss, please set lambda_identity = 0.1')
             parser.add_argument('--attention', action='store_true',
                                 help='use attention layer')
+
             parser.add_argument('--preprocess_mask', action='store_false',
                                 help='use preprocessing on mask')
+            parser.add_argument('--preprocess_flip', action='store_false',
+                                help='use preprocessing horizontal flip')
+            parser.add_argument('--preprocess_shift', action='store_false',
+                                help='use preprocessing shifting')
+            parser.add_argument('--preprocess_rotate', action='store_false',
+                                help='use preprocessing rotation')
+            parser.add_argument('--preprocess_permute', action='store_false',
+                                help='use preprocessing color permutation')
+            parser.add_argument('--preprocess_jitter', action='store_false',
+                                help='use preprocessing color jitter')
         return parser
 
     def __init__(self, opt):
@@ -86,7 +97,7 @@ class mergeganmodel(BaseModel):
         #self.netG = networks.define_G(opt.input_nc, opt.output_nc, opt.ngf, opt.netG, opt.norm,
         #                                not opt.no_dropout, opt.init_type, opt.init_gain, self.gpu_ids)
 
-        self.netG = encoder_decoder.Generator(opt.input_nc, opt.input_nc, opt.last_conv_nc, opt.sep, opt.input_size, opt.background, opt.preprocess_mask).to(self.device)
+        self.netG = encoder_decoder.Generator(opt.input_nc, opt.input_nc, opt.last_conv_nc, opt.sep, opt.input_size, opt.background, False).to(self.device)
         if self.isTrain:  # define discriminator
             #self.netD = networks.define_D(opt.output_nc, opt.ndf, opt.netD,
             #                                opt.n_layers_D, opt.norm, opt.init_type, opt.init_gain, self.gpu_ids)
@@ -106,7 +117,7 @@ class mergeganmodel(BaseModel):
             self.optimizers.append(self.optimizer_G)
             self.optimizers.append(self.optimizer_D)
 
-    def set_input(self, model_input):
+    def set_input(self, model_input, input_mode):
         """Unpack input data from the dataloader and perform necessary pre-processing steps.
 
         Parameters:
@@ -120,18 +131,101 @@ class mergeganmodel(BaseModel):
         # This is crucial so that the descriminator doesn't learn to focus on learning the real image and detect
         # that it was altered.
 
-        real_G_orig = model_input['real_G']
-        _, C, H, W = real_G_orig.shape
+        self.real_G = model_input['real_G'].clone()
+        self.real_D = model_input['real_D'].clone()
+        N1, C1, H1, W1 = self.real_G.shape
+        N2, C2, H2, W2 = self.real_D.shape
 
         if self.opt.background:
             if not self.opt.attention:
-                self.mask_G = model_input['mask_G'].unsqueeze(1).expand_as(real_G_orig).reshape(-1, 2, C, H, W).to(self.device)
+                self.mask_G = model_input['mask_G'].clone()
+                self.mask_D = model_input['mask_D'].clone()
+                self.mask_G = self.mask_D.unsqueeze(1).expand_as(self.real_G)
+                self.mask_D = self.mask_D.unsqueeze(1).expand_as(self.real_D)
 
-        self.real_G = real_G_orig.reshape(-1, 2, C, H, W).to(self.device)
-        self.real_D = model_input['real_D'].to(self.device)
+        self.input_mode = input_mode
+        if self.input_mode == 'mix':
+            self.mask_G = self.mask_G.reshape(-1, 2, C1, H1, W1)
+            self.real_G = self.real_G.reshape(-1, 2, C1, H1, W1)
+        elif self.input_mode == 'reflection':
+            self.mask_G = self.mask_G.unsqueeze(1).expand(N1, 2, C1, H1, W1)
+            self.real_G = self.real_G.unsqueeze(1).expand(N1, 2, C1, H1, W1)
+
+        if self.opt.preprocess_mask:
+            self.preprocess()
+            self.real_G_ref = self.real_G_ref.to(self.device)
+
+        # To device
+        self.real_G = self.real_G.to(self.device)
+        self.real_D = self.real_D.to(self.device)
+        if self.opt.background:
+            if not self.opt.attention:
+                self.mask_G = self.mask_G.to(self.device)
+                self.mask_D = self.mask_D.to(self.device)
 
         #self.image_paths_G = model_input['paths_G']
         #self.image_paths_D = model_input['paths_D']
+
+    def preprocess(self, opt=None):
+        # This function preprocesses the inputs with augmentation.
+        # 1. Horizontal flip
+        # 2. Shift
+        # 3. Rotate
+        # 4. Permute colors
+        # 5. brightness, Contrast
+
+        if opt is None:
+            opt = self.opt
+
+        N1, B1, C1, H1, W1 = self.real_G.shape
+        N2, C2, H2, W2 = self.real_D.shape
+        # 1. Flip
+        if opt.preprocess_flip:
+            flip = torch.randint(2, (N1, B1, 1, 1, 1)).expand_as(self.real_G)
+            self.real_G = torch.where(flip == 1, self.real_G.flip(4), self.real_G)
+            self.mask_G = torch.where(flip == 1, self.mask_G.flip(4), self.mask_G)
+            flip = torch.randint(2, (N2,1, 1, 1)).expand_as(self.real_D)
+            self.real_D = torch.where(flip == 1, self.real_D.flip(3), self.real_D)
+            self.mask_D = torch.where(flip == 1, self.mask_D.flip(3), self.mask_D)
+
+        # 2. Shift
+        # 3. Rotate
+
+        self.mask_G = torch.where(self.mask_G >= 0.5, torch.ones_like(self.mask_G), torch.zeros_like(self.mask_G))
+        self.mask_D = torch.where(self.mask_D >= 0.5, torch.ones_like(self.mask_D), torch.zeros_like(self.mask_D))
+
+        self.real_G_ref = self.real_G.clone()
+        #self.real_D_ref = self.real_D.clone()
+
+        # 4. Permute colors
+        if opt.preprocess_permute:
+            permute1 = torch.randint(10, (N1, B1)) >= 5
+            permute2 = torch.randint(10, (N1, B1)) >= 5
+            permute3 = torch.randint(10, (N1, B1)) >= 5
+            # self.real_G[permute1][self.mask_G[permute1] == 1] = self.real_G[permute1][self.mask_G[permute1] == 1][:, :, (0, 2, 1), :, :]
+            #self.real_G[permute2][self.mask_G[permute2] == 1] = self.real_G[permute2][self.mask_G[permute2] == 1][:, :, (0, 2, 1), :, :]
+            #self.real_G[permute3][self.mask_G[permute3] == 1] = self.real_G[permute3][self.mask_G[permute3] == 1][:, :, (2, 1, 0), :, :]
+            self.real_G[permute1] = torch.where(self.mask_G[permute1] == 1, self.real_G[permute1][:,  (1, 2, 0), :, :], self.real_G[permute1])
+            self.real_G[permute2] = torch.where(self.mask_G[permute2] == 1, self.real_G[permute2][:,  (0, 2, 1), :, :], self.real_G[permute2])
+            self.real_G[permute3] = torch.where(self.mask_G[permute3] == 1, self.real_G[permute3][:,  (2, 1, 0), :, :], self.real_G[permute3])
+            #self.real_G_ref[permute1][self.mask_G[permute1].flip([1]) == 1] = self.real_G_ref[permute1][self.mask_G[permute1].flip([1]) == 1][:, :, (1, 2, 0), :, :]
+            #self.real_G_ref[permute2][self.mask_G[permute2].flip([1]) == 1] = self.real_G_ref[permute2][self.mask_G[permute2].flip([1]) == 1][:, :, (0, 2, 1), :, :]
+            #self.real_G_ref[permute3][self.mask_G[permute3].flip([1]) == 1] = self.real_G_ref[permute3][self.mask_G[permute3].flip([1]) == 1][:, :, (2, 1, 0), :, :]
+            self.real_G_ref[permute1] = torch.where(self.mask_G[permute1.flip(1)] == 1, self.real_G_ref[permute1][:, (1, 2, 0), :, :], self.real_G_ref[permute1])
+            self.real_G_ref[permute2] = torch.where(self.mask_G[permute2.flip(1)] == 1, self.real_G_ref[permute2][:, (0, 2, 1), :, :], self.real_G_ref[permute2])
+            self.real_G_ref[permute3] = torch.where(self.mask_G[permute3.flip(1)] == 1, self.real_G_ref[permute3][:, (2, 1, 0), :, :], self.real_G_ref[permute3])
+
+            permute1 = torch.randint(10, (N2,)) >= 5
+            permute2 = torch.randint(10, (N2,)) >= 5
+            permute3 = torch.randint(10, (N2,)) >= 5
+            #self.real_D[permute1][self.mask_D[permute1] == 1] = self.real_D[permute1][self.mask_D[permute1] == 1][:, (1, 2, 0), :, :]
+            #self.real_D[permute2][self.mask_D[permute2] == 1] = self.real_D[permute2][self.mask_D[permute2] == 1][:, (0, 2, 1), :, :]
+            #self.real_D[permute3][self.mask_D[permute3] == 1] = self.real_D[permute3][self.mask_D[permute3] == 1][:, (2, 1, 0), :, :]
+            self.real_D[permute1] = torch.where(self.mask_D[permute1] == 1, self.real_D[permute1][:, (1, 2, 0), :, :], self.real_D[permute1])
+            self.real_D[permute2] = torch.where(self.mask_D[permute2] == 1, self.real_D[permute2][:, (1, 2, 0), :, :], self.real_D[permute2])
+            self.real_D[permute3] = torch.where(self.mask_D[permute3] == 1, self.real_D[permute3][:, (1, 2, 0), :, :], self.real_D[permute3])
+
+
 
     def forward(self):
         """Run forward pass; called by both functions <optimize_parameters> and <test>."""
@@ -150,29 +244,32 @@ class mergeganmodel(BaseModel):
             self.rec_G_1 = self.netG(self.fake_G)  # G(G(A))
 
         # Recreate original images from fake image and real image as second
-        if self.opt.background and not self.opt.attention:
-            self.rec_G_2A = self.netG(
-                torch.cat((self.fake_G[:, self.A, :, :, :].unsqueeze(1), self.real_G[:, self.A, :, :, :].unsqueeze(1)), dim=1),
-                mask_in=self.mask_G[:, self.A, :, :, :], mode=self.A)  # G(G(A))
-            self.rec_G_2B = self.netG(
-                torch.cat((self.real_G[:, self.B, :, :, :].unsqueeze(1), self.fake_G[:, self.B, :, :, :].unsqueeze(1)), dim=1),
-                mask_in=self.mask_G[:, self.B, :, :, :], mode=self.B)  # G(G(A))
-        else:
-            self.rec_G_2A = self.netG(
-                torch.cat((self.fake_G[:, self.A, :, :, :].unsqueeze(1), self.real_G[:, self.A, :, :, :].unsqueeze(1)), dim=1),
-                mode=self.A)  # G(G(A))
-            self.rec_G_2B = self.netG(
-                torch.cat((self.real_G[:, self.B, :, :, :].unsqueeze(1), self.fake_G[:, self.B, :, :, :].unsqueeze(1)), dim=1),
-                mode=self.B)  # G(G(A))
+        if self.input_mode == 'mix':
+            if self.opt.background and not self.opt.attention:
+                self.rec_G_2A = self.netG(
+                    torch.cat((self.fake_G[:, self.A, :, :, :].unsqueeze(1), self.real_G[:, self.A, :, :, :].unsqueeze(1)), dim=1),
+                    mask_in=self.mask_G[:, self.A, :, :, :], mode=self.A)  # G(G(A))
+                self.rec_G_2B = self.netG(
+                    torch.cat((self.real_G[:, self.B, :, :, :].unsqueeze(1), self.fake_G[:, self.B, :, :, :].unsqueeze(1)), dim=1),
+                    mask_in=self.mask_G[:, self.B, :, :, :], mode=self.B)  # G(G(A))
+            else:
+                self.rec_G_2A = self.netG(
+                    torch.cat((self.fake_G[:, self.A, :, :, :].unsqueeze(1), self.real_G[:, self.A, :, :, :].unsqueeze(1)), dim=1),
+                    mode=self.A)  # G(G(A))
+                self.rec_G_2B = self.netG(
+                    torch.cat((self.real_G[:, self.B, :, :, :].unsqueeze(1), self.fake_G[:, self.B, :, :, :].unsqueeze(1)), dim=1),
+                    mode=self.B)  # G(G(A))
 
         # Use identity constraint for same image in both inputs
-        if self.opt.lambda_Identity > 0:
-            N, _, C, H, W = self.real_G.shape
-            self.iden_G = self.netG(
-                self.real_G.reshape(2*N, 1, C, H, W).expand(2*N, 2, C, H, W),
-                mask_in=self.mask_G.reshape(2*N, C, H, W),
-                mode=self.A
-            )
+        # if self.input_mode == 'reflection'
+        #     if self.opt.lambda_Identity > 0:
+        #         N, _, C, H, W = self.real_G.shape
+        #         self.iden_G = self.netG(
+        #             self.real_G.reshape(2*N, 1, C, H, W).expand(2*N, 2, C, H, W),
+        #             mask_in=self.mask_G.reshape(2*N, C, H, W),
+        #             mode=self.A
+        #         )
+
     def backward_D(self):
         """Calculate GAN loss for the discriminator
 
@@ -207,6 +304,7 @@ class mergeganmodel(BaseModel):
 
         # GAN loss D(G(A))
         self.loss_GG = self.criterionGAN(self.netD(self.fake_G.reshape(-1, C, H, W)), True)
+
         # GAN Background loss
         if self.opt.background:
             self.loss_G_background = self.criterionBackground(
@@ -215,16 +313,23 @@ class mergeganmodel(BaseModel):
                                      * self.opt.lambda_Background
         else:
             self.loss_G_background = 0
+
         # Forward cycle loss || G(G(A)) - A||
-        self.loss_cycle_1 = self.criterionCycle(self.rec_G_1, self.real_G) * self.opt.lambda_G1
-        self.loss_cycle_2A = self.criterionCycle(self.rec_G_2A, self.real_G[:, self.A, :, :, :]) * self.opt.lambda_G2
-        self.loss_cycle_2B = self.criterionCycle(self.rec_G_2B, self.real_G[:, self.B, :, :, :]) * self.opt.lambda_G2
+        if self.input_mode == 'mix':
+            self.loss_cycle_1 = self.criterionCycle(self.rec_G_1, self.real_G) * self.opt.lambda_G1
+            self.loss_cycle_2A = self.criterionCycle(self.rec_G_2A, self.real_G[:, self.A, :, :, :]) * self.opt.lambda_G2
+            self.loss_cycle_2B = self.criterionCycle(self.rec_G_2B, self.real_G[:, self.B, :, :, :]) * self.opt.lambda_G2
+
         # Identity
-        if self.opt.lambda_Identity > 0:
-            self.loss_identity = self.criterionCycle(self.real_G, self.iden_G.reshape(-1, 2, C, H, W)) * self.opt.lambda_Identity
+        if self.input_mode == 'reflection':
+            if self.opt.lambda_Identity > 0:
+                self.loss_identity = self.criterionCycle(self.real_G_ref, self.fake_G) * self.opt.lambda_Identity
 
         # combined loss and calculate gradients
-        self.loss_G = self.loss_GG + self.loss_G_background + self.loss_cycle_1 + self.loss_cycle_2A + self.loss_cycle_2B + self.loss_identity
+        if self.input_mode == 'mix':
+            self.loss_G = self.loss_GG + self.loss_G_background + self.loss_cycle_1 + self.loss_cycle_2A + self.loss_cycle_2B
+        elif self.input_mode == 'reflection':
+            self.loss_G = self.loss_GG + self.loss_G_background + self.loss_identity
         self.loss_G.backward()
 
     def optimize_parameters(self):
@@ -242,16 +347,22 @@ class mergeganmodel(BaseModel):
         self.backward_D()      # calculate gradients for D
         self.optimizer_D.step()  # update D weights
 
-    def runG(self, model_test_input):
+    def runG(self, model_test_input=None):
         # Prepare data
-        real_G = model_test_input['real_G']
-        N, C, H, W = real_G.shape
-        if self.opt.background:
-            if not self.opt.attention:
-                mask_G = model_test_input['mask_G'].unsqueeze(1).expand_as(real_G).reshape(-1, 2, 3, H, W).to(self.device)
+        if model_test_input is None:
+            real_G = self.real_G
+            mask_G = self.mask_G
+            N, _, C, H, W = real_G.shape
+            N = 2*N
+        else:
+            real_G = model_test_input['real_G']
+            N, C, H, W = real_G.shape
+            if self.opt.background:
+                if not self.opt.attention:
+                    mask_G = model_test_input['mask_G'].unsqueeze(1).expand_as(real_G).reshape(-1, 2, 3, H, W).to(self.device)
 
-        real_G = real_G.reshape(-1, 2, C, H, W).to(self.device)
-        #self.real_D = input['real_D'].to(self.device)
+            real_G = real_G.reshape(-1, 2, C, H, W).to(self.device)
+            #self.real_D = input['real_D'].to(self.device)
 
         # Get results
         test_results = self.netG(real_G, mask_in=mask_G)

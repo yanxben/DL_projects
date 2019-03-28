@@ -26,9 +26,12 @@ from models import create_model
 import matplotlib.pyplot as plt
 import torch
 #from util.visualizer import Visualizer
+import pylab
+
 
 testset = list(range(10)) # [0, 4, 5, 6, 206, 210, 213, 405, 407, 435]
 if __name__ == '__main__':
+    t0 = time.time()
     opt = TrainOptions().parse()   # get training options
     dataset, stl10_data = create_dataset_stl10_bird(opt)  # create a dataset given opt.dataset_mode and other options
     dataset_size = len(dataset)    # get the number of images in the dataset.
@@ -36,8 +39,10 @@ if __name__ == '__main__':
 
     stl10_data_test = stl10_data[testset]
     model_test_input = {'real_G': torch.Tensor(stl10_data_test[:, :3, :, :]),
-                        'mask_G': torch.Tensor(stl10_data_test[:, 3, :, :])}
-    testset_figure = plt.figure()
+                        'mask_G': torch.Tensor(stl10_data_test[:, 3, :, :]),
+                        'real_D': torch.Tensor(stl10_data_test[:, :3, :, :]),
+                        'mask_D': torch.Tensor(stl10_data_test[:, 3, :, :])}
+    testset_figure = plt.figure(1)
     for i in range(len(testset)//2):
         plt.subplot(5, 6, i * 6 + 1)
         plt.imshow(model_test_input['real_G'][2*i].permute([1, 2, 0]))
@@ -47,12 +52,15 @@ if __name__ == '__main__':
         plt.subplot(5, 6, i * 6 + 4)
         plt.subplot(5, 6, i * 6 + 5)
         plt.subplot(5, 6, i * 6 + 6)
+    if not os.path.isdir(os.path.join(opt.plots_dir, opt.name)):
+        os.mkdir(os.path.join(opt.plots_dir, opt.name))
 
     model = create_model(opt)      # create a model given opt.model and other options
     model.setup(opt)               # regular setup: load and print networks; create schedulers
     #visualizer = Visualizer(opt)   # create a visualizer that display/save images and plots
     total_iters = 0                # the total number of training iterations
 
+    print('End of initialization. Time Taken: %d sec' % (time.time() - t0))
     for epoch in range(opt.epoch_count, opt.niter + opt.niter_decay + 1):    # outer loop for different epochs; we save the model by <epoch_count>, <epoch_count>+<save_latest_freq>
         epoch_start_time = time.time()  # timer for entire epoch
         iter_data_time = time.time()    # timer for data loading per iteration
@@ -73,8 +81,8 @@ if __name__ == '__main__':
                            'real_D': data['image'][:, :3, :, :],
                            'mask_G': data['image'][:, 3, :, :],
                            'mask_D': data['image'][:, 3, :, :]}
-            model.set_input(model_input)         # unpack data from dataset and apply preprocessing
-            model.optimize_parameters()   # calculate loss functions, get gradients, update network weights
+            model.set_input(model_input, 'mix' if i % 2 == 0 else 'reflection')  # unpack data from dataset and apply preprocessing
+            model.optimize_parameters()  # calculate loss functions, get gradients, update network weights
 
             # display images on visdom and save images to a HTML file
             #if total_iters % opt.display_freq == 0:
@@ -95,22 +103,48 @@ if __name__ == '__main__':
         # cache our model every <save_epoch_freq> epochs
         if epoch % opt.save_epoch_freq == 0:
             print('saving the model at the end of epoch %d, iters %d' % (epoch, total_iters))
-            save_suffix = 'epoch_%d' % epoch
-            model.save_networks(save_suffix)
+            #save_suffix = 'epoch_%d' % epoch
+            #model.save_networks(save_suffix)
+
             # Plot intermediate results
+            plt.figure(1)
             test_results, iden_results = model.runG(model_test_input)
-            test_results = test_results.detach()
-            iden_results = iden_results.detach()
+            test_results = test_results.detach().cpu()
+            iden_results = iden_results.detach().cpu()
             for i in range(len(testset) // 2):
-                plt.subplot(5, 6, 6 * i + 3)
+                plt.subplot(len(testset) // 2, 6, 6 * i + 3)
                 plt.imshow(test_results[i, 0].permute([1, 2, 0]))
-                plt.subplot(5, 6, 6 * i + 4)
+                plt.subplot(len(testset) // 2, 6, 6 * i + 4)
                 plt.imshow(test_results[i, 1].permute([1, 2, 0]))
-                plt.subplot(5, 6, 6 * i + 5)
+                plt.subplot(len(testset) // 2, 6, 6 * i + 5)
                 plt.imshow(iden_results[2 * i].permute([1, 2, 0]))
-                plt.subplot(5, 6, 6 * i + 6)
+                plt.subplot(len(testset) // 2, 6, 6 * i + 6)
                 plt.imshow(iden_results[2 * i + 1].permute([1, 2, 0]))
+            plt.get_current_fig_manager().resize(1920, 1080)
+            plt.pause(0.01)
             plt.savefig(os.path.join(opt.plots_dir, opt.name, 'epoch_%d.png' % epoch))
+
+            plt.figure(2)
+            model.set_input(model_test_input, 'reflection')
+            test_results, iden_results = model.runG()
+            test_results = test_results.detach().cpu()
+            iden_results = iden_results.detach().cpu()
+            for i in range(len(testset)):
+                plt.subplot(len(testset), 6, 6 * i + 1)
+                plt.imshow(model.real_G[i, 0].detach().cpu().permute([1, 2, 0]))
+                plt.subplot(len(testset), 6, 6 * i + 2)
+                plt.imshow(model.real_G[i, 1].detach().cpu().permute([1, 2, 0]))
+                plt.subplot(len(testset), 6, 6 * i + 3)
+                plt.imshow(test_results[i, 0].permute([1, 2, 0]))
+                plt.subplot(len(testset), 6, 6 * i + 4)
+                plt.imshow(test_results[i, 1].permute([1, 2, 0]))
+                plt.subplot(len(testset), 6, 6 * i + 5)
+                plt.imshow(iden_results[2 * i].permute([1, 2, 0]))
+                plt.subplot(len(testset), 6, 6 * i + 6)
+                plt.imshow(iden_results[2 * i + 1].permute([1, 2, 0]))
+            plt.get_current_fig_manager().resize(1920, 1080)
+            plt.pause(0.01)
+            plt.savefig(os.path.join(opt.plots_dir, opt.name, 'reflection_epoch_%d.png' % epoch))
 
         print('End of epoch %d / %d \t Time Taken: %d sec' % (epoch, opt.niter + opt.niter_decay, time.time() - epoch_start_time))
         model.update_learning_rate()                     # update learning rates at the end of every epoch.
