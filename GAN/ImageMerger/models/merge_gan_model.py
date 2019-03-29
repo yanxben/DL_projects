@@ -39,12 +39,12 @@ class mergeganmodel(BaseModel):
         """
         parser.set_defaults(no_dropout=True)  # default CycleGAN did not use dropout
         if is_train:
-            parser.add_argument('--sep', type=int, default=32, help='')
+            parser.add_argument('--sep', type=int, default=128, help='')
             parser.add_argument('--input_size', type=int, default=96, help='')
             parser.add_argument('--last_conv_nc', type=int, default=512, help='')
             parser.add_argument('--lambda_G1', type=float, default=1.0, help='weight for cycle loss (A -> B -> A)')
             parser.add_argument('--lambda_G2', type=float, default=1.0, help='weight for cycle loss (B -> A -> B)')
-            parser.add_argument('--lambda_Background', type=float, default=0.4, help='use background mapping. Setting lambda_identity other than 0 has an effect of scaling the weight of the identity mapping loss. For example, if the weight of the identity loss should be 10 times smaller than the weight of the reconstruction loss, please set lambda_identity = 0.1')
+            parser.add_argument('--lambda_Background', type=float, default=0.5, help='use background mapping. Setting lambda_identity other than 0 has an effect of scaling the weight of the identity mapping loss. For example, if the weight of the identity loss should be 10 times smaller than the weight of the reconstruction loss, please set lambda_identity = 0.1')
             parser.add_argument('--background', action='store_false',
                                 help='use background')
             parser.add_argument('--lambda_Identity', type=float, default=1.0,
@@ -153,11 +153,11 @@ class mergeganmodel(BaseModel):
 
         if self.opt.preprocess_mask:
             self.preprocess()
-            self.real_G_ref = self.real_G_ref.to(self.device)
+            self.real_G_ref = ((self.real_G_ref - 0.5) * 2).to(self.device)
 
         # To device
-        self.real_G = self.real_G.to(self.device)
-        self.real_D = self.real_D.to(self.device)
+        self.real_G = ((self.real_G - 0.5) * 2).to(self.device)
+        self.real_D = ((self.real_D - 0.5) * 2).to(self.device)
         if self.opt.background:
             if not self.opt.attention:
                 self.mask_G = self.mask_G.to(self.device)
@@ -211,9 +211,9 @@ class mergeganmodel(BaseModel):
             #self.real_G_ref[permute1][self.mask_G[permute1].flip([1]) == 1] = self.real_G_ref[permute1][self.mask_G[permute1].flip([1]) == 1][:, :, (1, 2, 0), :, :]
             #self.real_G_ref[permute2][self.mask_G[permute2].flip([1]) == 1] = self.real_G_ref[permute2][self.mask_G[permute2].flip([1]) == 1][:, :, (0, 2, 1), :, :]
             #self.real_G_ref[permute3][self.mask_G[permute3].flip([1]) == 1] = self.real_G_ref[permute3][self.mask_G[permute3].flip([1]) == 1][:, :, (2, 1, 0), :, :]
-            self.real_G_ref[permute1] = torch.where(self.mask_G[permute1.flip(1)] == 1, self.real_G_ref[permute1][:, (1, 2, 0), :, :], self.real_G_ref[permute1])
-            self.real_G_ref[permute2] = torch.where(self.mask_G[permute2.flip(1)] == 1, self.real_G_ref[permute2][:, (0, 2, 1), :, :], self.real_G_ref[permute2])
-            self.real_G_ref[permute3] = torch.where(self.mask_G[permute3.flip(1)] == 1, self.real_G_ref[permute3][:, (2, 1, 0), :, :], self.real_G_ref[permute3])
+            self.real_G_ref[permute1.flip(1)] = torch.where(self.mask_G[permute1.flip(1)] == 1, self.real_G_ref[permute1.flip(1)][:, (1, 2, 0), :, :], self.real_G_ref[permute1.flip(1)])
+            self.real_G_ref[permute2.flip(1)] = torch.where(self.mask_G[permute2.flip(1)] == 1, self.real_G_ref[permute2.flip(1)][:, (0, 2, 1), :, :], self.real_G_ref[permute2.flip(1)])
+            self.real_G_ref[permute3.flip(1)] = torch.where(self.mask_G[permute3.flip(1)] == 1, self.real_G_ref[permute3.flip(1)][:, (2, 1, 0), :, :], self.real_G_ref[permute3.flip(1)])
 
             permute1 = torch.randint(10, (N2,)) >= 5
             permute2 = torch.randint(10, (N2,)) >= 5

@@ -29,13 +29,23 @@ import torch
 import pylab
 
 
+def tensor2im(t):
+    return (t / 2) + 0.5
+
+
+def im2tensor(i):
+    return (i - 0.5) * 2
+
+
 testset = list(range(10)) # [0, 4, 5, 6, 206, 210, 213, 405, 407, 435]
+testlen = len(testset)
 if __name__ == '__main__':
     t0 = time.time()
     opt = TrainOptions().parse()   # get training options
     dataset, stl10_data = create_dataset_stl10_bird(opt)  # create a dataset given opt.dataset_mode and other options
     dataset_size = len(dataset)    # get the number of images in the dataset.
-    print('The number of training images = %d' % dataset_size)
+    print('The number of training epochs = %d' % dataset_size)
+    print('The number of training images = %d' % stl10_data.shape[0])
 
     stl10_data_test = stl10_data[testset]
     model_test_input = {'real_G': torch.Tensor(stl10_data_test[:, :3, :, :]),
@@ -43,15 +53,15 @@ if __name__ == '__main__':
                         'real_D': torch.Tensor(stl10_data_test[:, :3, :, :]),
                         'mask_D': torch.Tensor(stl10_data_test[:, 3, :, :])}
     testset_figure = plt.figure(1)
-    for i in range(len(testset)//2):
-        plt.subplot(5, 6, i * 6 + 1)
+    for i in range(testlen//2):
+        plt.subplot(testlen//2, 6, i * 6 + 1)
         plt.imshow(model_test_input['real_G'][2*i].permute([1, 2, 0]))
-        plt.subplot(5, 6, i * 6 + 2)
+        plt.subplot(testlen//2, 6, i * 6 + 2)
         plt.imshow(model_test_input['real_G'][2*i + 1].permute([1, 2, 0]))
-        plt.subplot(5, 6, i * 6 + 3)
-        plt.subplot(5, 6, i * 6 + 4)
-        plt.subplot(5, 6, i * 6 + 5)
-        plt.subplot(5, 6, i * 6 + 6)
+        plt.subplot(testlen//2, 6, i * 6 + 3)
+        plt.subplot(testlen//2, 6, i * 6 + 4)
+        plt.subplot(testlen//2, 6, i * 6 + 5)
+        plt.subplot(testlen//2, 6, i * 6 + 6)
     if not os.path.isdir(os.path.join(opt.plots_dir, opt.name)):
         os.mkdir(os.path.join(opt.plots_dir, opt.name))
 
@@ -108,40 +118,42 @@ if __name__ == '__main__':
 
             # Plot intermediate results
             plt.figure(1)
+            #plt.title('epoch %d' % epoch)
             test_results, iden_results = model.runG(model_test_input)
             test_results = test_results.detach().cpu()
             iden_results = iden_results.detach().cpu()
-            for i in range(len(testset) // 2):
-                plt.subplot(len(testset) // 2, 6, 6 * i + 3)
-                plt.imshow(test_results[i, 0].permute([1, 2, 0]))
-                plt.subplot(len(testset) // 2, 6, 6 * i + 4)
-                plt.imshow(test_results[i, 1].permute([1, 2, 0]))
-                plt.subplot(len(testset) // 2, 6, 6 * i + 5)
-                plt.imshow(iden_results[2 * i].permute([1, 2, 0]))
-                plt.subplot(len(testset) // 2, 6, 6 * i + 6)
-                plt.imshow(iden_results[2 * i + 1].permute([1, 2, 0]))
+            for i in range(testlen // 2):
+                plt.subplot(testlen // 2, 6, 6 * i + 3)
+                plt.imshow(tensor2im(test_results[i, 0].permute([1, 2, 0])))
+                plt.subplot(testlen // 2, 6, 6 * i + 4)
+                plt.imshow(tensor2im(test_results[i, 1].permute([1, 2, 0])))
+                plt.subplot(testlen // 2, 6, 6 * i + 5)
+                plt.imshow(tensor2im(iden_results[2 * i].permute([1, 2, 0])))
+                plt.subplot(testlen // 2, 6, 6 * i + 6)
+                plt.imshow(tensor2im(iden_results[2 * i + 1].permute([1, 2, 0])))
             plt.get_current_fig_manager().resize(1920, 1080)
             plt.pause(0.01)
             plt.savefig(os.path.join(opt.plots_dir, opt.name, 'epoch_%d.png' % epoch))
 
             plt.figure(2)
+            #plt.title('Epoch %d' % epoch)
             model.set_input(model_test_input, 'reflection')
             test_results, iden_results = model.runG()
             test_results = test_results.detach().cpu()
             iden_results = iden_results.detach().cpu()
-            for i in range(len(testset)):
-                plt.subplot(len(testset), 6, 6 * i + 1)
-                plt.imshow(model.real_G[i, 0].detach().cpu().permute([1, 2, 0]))
-                plt.subplot(len(testset), 6, 6 * i + 2)
-                plt.imshow(model.real_G[i, 1].detach().cpu().permute([1, 2, 0]))
-                plt.subplot(len(testset), 6, 6 * i + 3)
-                plt.imshow(test_results[i, 0].permute([1, 2, 0]))
-                plt.subplot(len(testset), 6, 6 * i + 4)
-                plt.imshow(test_results[i, 1].permute([1, 2, 0]))
-                plt.subplot(len(testset), 6, 6 * i + 5)
-                plt.imshow(iden_results[2 * i].permute([1, 2, 0]))
-                plt.subplot(len(testset), 6, 6 * i + 6)
-                plt.imshow(iden_results[2 * i + 1].permute([1, 2, 0]))
+            for i in range(testlen):
+                plt.subplot(testlen, 6, 6 * i + 1)
+                plt.imshow(tensor2im(model.real_G[i, 0].detach().cpu().permute([1, 2, 0])))
+                plt.subplot(testlen, 6, 6 * i + 2)
+                plt.imshow(tensor2im(model.real_G[i, 1].detach().cpu().permute([1, 2, 0])))
+                plt.subplot(testlen, 6, 6 * i + 3)
+                plt.imshow(tensor2im(test_results[i, 0].permute([1, 2, 0])))
+                plt.subplot(testlen, 6, 6 * i + 4)
+                plt.imshow(tensor2im(test_results[i, 1].permute([1, 2, 0])))
+                plt.subplot(testlen, 6, 6 * i + 5)
+                plt.imshow(tensor2im(iden_results[2 * i].permute([1, 2, 0])))
+                plt.subplot(testlen, 6, 6 * i + 6)
+                plt.imshow(tensor2im(iden_results[2 * i + 1].permute([1, 2, 0])))
             plt.get_current_fig_manager().resize(1920, 1080)
             plt.pause(0.01)
             plt.savefig(os.path.join(opt.plots_dir, opt.name, 'reflection_epoch_%d.png' % epoch))
@@ -150,3 +162,4 @@ if __name__ == '__main__':
         model.update_learning_rate()                     # update learning rates at the end of every epoch.
 
     print('DONE')
+
