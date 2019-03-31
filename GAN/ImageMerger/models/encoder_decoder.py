@@ -204,3 +204,45 @@ class Discriminator(nn.Module):
         x = self.linear(x)
         x = self.activation(x)
         return x
+
+class Discriminator2(nn.Module):
+    def __init__(self, input_nc, last_conv_nc, input_size):
+        super(Discriminator2, self).__init__()
+        self.input_nc = input_nc
+        self.last_conv_nc = last_conv_nc
+        self.input_size = input_size
+        self.feature_size = input_size // 32
+
+        self.Ea = E1(input_nc, last_conv_nc, 0, self.input_size)
+        self.linear = nn.Linear(2*(last_conv_nc * self.feature_size * self.feature_size), 1024)
+        self.linear = nn.Linear(1024, 1)
+        self.activation = nn.Sigmoid()
+
+    def forward(self, x):
+        x1 = x[:, 0, :, :, :]
+        x2 = x[:, 1, :, :, :]
+
+        x1 = self.Ea(x1)
+        x2 = self.Ea(x2)
+        x = self.linear(torch.cat([x1, x2], dim=1))
+        x = self.activation(x)
+        return x
+
+
+class Classifier200(nn.Module):
+    def __init__(self, input_nc, last_conv_nc, input_size):
+        super(Classifier200, self).__init__()
+        self.input_nc = input_nc
+        self.last_conv_nc = last_conv_nc
+        self.input_size = input_size
+        self.feature_size = input_size // 32
+
+        self.E = E1(input_nc, last_conv_nc, 0, self.input_size)
+        self.linear = nn.Linear(last_conv_nc * self.feature_size * self.feature_size, 1024)
+        self.linear = nn.Linear(1024, 200)
+        self.activation = nn.Softmax()
+
+    def forward(self, x):
+        x = self.E(x)
+        x = self.activation(x)
+        return x
