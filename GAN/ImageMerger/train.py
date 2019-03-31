@@ -18,15 +18,18 @@ See options/base_options.py and options/train_options.py for more training optio
 See training and test tips at: https://github.com/junyanz/pytorch-CycleGAN-and-pix2pix/blob/master/docs/tips.md
 See frequently asked questions at: https://github.com/junyanz/pytorch-CycleGAN-and-pix2pix/blob/master/docs/qa.md
 """
+
 import os
 import time
 from options.train_options import TrainOptions
 from data.data_stl10 import create_dataset_stl10_bird
 from models import create_model
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import torch
 #from util.visualizer import Visualizer
-import pylab
+
 
 
 def tensor2im(t):
@@ -52,7 +55,11 @@ if __name__ == '__main__':
                         'mask_G': torch.Tensor(stl10_data_test[:, 3, :, :]),
                         'real_D': torch.Tensor(stl10_data_test[:, :3, :, :]),
                         'mask_D': torch.Tensor(stl10_data_test[:, 3, :, :])}
-    testset_figure = plt.figure(1)
+
+    plt.figure('test merge', figsize=(1920 / 100, 1080 / 100), dpi=100)
+    plt.figure('test reflect', figsize=(1920 / 100, 1080 / 100), dpi=100)
+
+    plt.figure('test merge')
     for i in range(testlen//2):
         plt.subplot(testlen//2, 6, i * 6 + 1)
         plt.imshow(model_test_input['real_G'][2*i].permute([1, 2, 0]))
@@ -117,7 +124,7 @@ if __name__ == '__main__':
             #model.save_networks(save_suffix)
 
             # Plot intermediate results
-            plt.figure(1)
+            plt.figure('test merge')
             #plt.title('epoch %d' % epoch)
             test_results, iden_results = model.runG(model_test_input)
             test_results = test_results.detach().cpu()
@@ -131,11 +138,12 @@ if __name__ == '__main__':
                 plt.imshow(tensor2im(iden_results[2 * i].permute([1, 2, 0])))
                 plt.subplot(testlen // 2, 6, 6 * i + 6)
                 plt.imshow(tensor2im(iden_results[2 * i + 1].permute([1, 2, 0])))
-            plt.get_current_fig_manager().resize(1920, 1080)
-            plt.pause(0.01)
+            #plt.get_current_fig_manager().resize(1920, 1080)
+            plt.suptitle('Merge epoch %d' % epoch, fontsize=12)
+            #plt.pause(0.01)
             plt.savefig(os.path.join(opt.plots_dir, opt.name, 'epoch_%d.png' % epoch))
 
-            plt.figure(2)
+            plt.figure('test reflect')
             #plt.title('Epoch %d' % epoch)
             model.set_input(model_test_input, 'reflection')
             test_results, iden_results = model.runG()
@@ -154,8 +162,9 @@ if __name__ == '__main__':
                 plt.imshow(tensor2im(iden_results[2 * i].permute([1, 2, 0])))
                 plt.subplot(testlen, 6, 6 * i + 6)
                 plt.imshow(tensor2im(iden_results[2 * i + 1].permute([1, 2, 0])))
-            plt.get_current_fig_manager().resize(1920, 1080)
-            plt.pause(0.01)
+            #plt.get_current_fig_manager().resize(1920, 1080)
+            plt.suptitle('Reflection epoch %d' % epoch, fontsize=12)
+            #plt.pause(0.01)
             plt.savefig(os.path.join(opt.plots_dir, opt.name, 'reflection_epoch_%d.png' % epoch))
 
         print('End of epoch %d / %d \t Time Taken: %d sec' % (epoch, opt.niter + opt.niter_decay, time.time() - epoch_start_time))

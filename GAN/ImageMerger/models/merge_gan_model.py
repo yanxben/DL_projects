@@ -353,23 +353,22 @@ class mergeganmodel(BaseModel):
             real_G = self.real_G
             mask_G = self.mask_G
             N, _, C, H, W = real_G.shape
-            N = 2*N
         else:
             real_G = model_test_input['real_G']
             N, C, H, W = real_G.shape
             if self.opt.background:
                 if not self.opt.attention:
-                    mask_G = model_test_input['mask_G'].unsqueeze(1).expand_as(real_G).reshape(-1, 2, 3, H, W).to(self.device)
+                    mask_G = model_test_input['mask_G'].unsqueeze(1).expand_as(real_G).reshape(-1, 2, C, H, W).to(self.device)
 
             real_G = real_G.reshape(-1, 2, C, H, W).to(self.device)
-            #self.real_D = input['real_D'].to(self.device)
+            N = N//2
 
         # Get results
         test_results = self.netG(real_G, mask_in=mask_G)
 
         iden_results = self.netG(
-            real_G.reshape(N, 1, C, H, W).expand(N, 2, C, H, W),
-            mask_in=mask_G.reshape(N, C, H, W),
+            real_G.reshape(2*N, 1, C, H, W).expand(2*N, 2, C, H, W),
+            mask_in=mask_G.reshape(2*N, C, H, W),
             mode=self.A
         )
 
