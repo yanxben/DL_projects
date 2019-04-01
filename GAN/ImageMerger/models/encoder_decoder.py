@@ -2,34 +2,54 @@ import torch
 import torch.nn as nn
 
 class E1(nn.Module):
-    def __init__(self, input_nc, last_conv_nc, sep, input_size):
+    def __init__(self, input_nc, last_conv_nc, sep, input_size, depth):
         super(E1, self).__init__()
+        assert (input_size // (2 ** depth) == input_size / (2 ** depth), 'Bad depth for input size')
         self.input_nc = input_nc
         self.last_conv_nc = last_conv_nc
         self.sep = sep
         self.input_size = input_size
-        self.feature_size = input_size // 32
+        self.feature_size = input_size // (2 ** depth)
 
-        self.full = nn.Sequential(
-            nn.Conv2d(self.input_nc, 32, 4, 2, 1),
-            nn.InstanceNorm2d(32),
-            nn.LeakyReLU(0.2, inplace=True),
-            nn.Conv2d(32, 64, 4, 2, 1),
-            nn.InstanceNorm2d(64),
-            nn.LeakyReLU(0.2, inplace=True),
-            nn.Conv2d(64, 128, 4, 2, 1),
-            nn.InstanceNorm2d(128),
-            nn.LeakyReLU(0.2, inplace=True),
-            nn.Conv2d(128, 256, 4, 2, 1),
-            nn.InstanceNorm2d(256),
-            nn.LeakyReLU(0.2, inplace=True),
-            nn.Conv2d(256, (last_conv_nc - self.sep), 4, 2, 1),
-            nn.InstanceNorm2d(last_conv_nc - self.sep),
-            nn.LeakyReLU(0.2, inplace=True),
-            #nn.Conv2d((last_conv_nc - self.sep), (last_conv_nc - self.sep), 4, 2, 1),
-            #nn.InstanceNorm2d(last_conv_nc - self.sep),
-            #nn.LeakyReLU(0.2, inplace=True),
-        )
+        if depth == 5:
+            self.full = nn.Sequential(
+                nn.Conv2d(self.input_nc, 32, 4, 2, 1),
+                nn.InstanceNorm2d(32),
+                nn.LeakyReLU(0.2, inplace=True),
+                nn.Conv2d(32, 64, 4, 2, 1),
+                nn.InstanceNorm2d(64),
+                nn.LeakyReLU(0.2, inplace=True),
+                nn.Conv2d(64, 128, 4, 2, 1),
+                nn.InstanceNorm2d(128),
+                nn.LeakyReLU(0.2, inplace=True),
+                nn.Conv2d(128, 256, 4, 2, 1),
+                nn.InstanceNorm2d(256),
+                nn.LeakyReLU(0.2, inplace=True),
+                nn.Conv2d(256, (last_conv_nc - self.sep), 4, 2, 1),
+                nn.InstanceNorm2d(last_conv_nc - self.sep),
+                nn.LeakyReLU(0.2, inplace=True)
+            )
+        if depth == 6:
+            self.full = nn.Sequential(
+                nn.Conv2d(self.input_nc, 32, 4, 2, 1),
+                nn.InstanceNorm2d(32),
+                nn.LeakyReLU(0.2, inplace=True),
+                nn.Conv2d(32, 64, 4, 2, 1),
+                nn.InstanceNorm2d(64),
+                nn.LeakyReLU(0.2, inplace=True),
+                nn.Conv2d(64, 128, 4, 2, 1),
+                nn.InstanceNorm2d(128),
+                nn.LeakyReLU(0.2, inplace=True),
+                nn.Conv2d(128, 256, 4, 2, 1),
+                nn.InstanceNorm2d(256),
+                nn.LeakyReLU(0.2, inplace=True),
+                nn.Conv2d(256, 512, 4, 2, 1),
+                nn.InstanceNorm2d(512),
+                nn.LeakyReLU(0.2, inplace=True),
+                nn.Conv2d(512, (last_conv_nc - self.sep), 4, 2, 1),
+                nn.InstanceNorm2d(last_conv_nc - self.sep),
+                nn.LeakyReLU(0.2, inplace=True)
+            )
 
     def forward(self, x):
         x = self.full(x)
@@ -38,33 +58,53 @@ class E1(nn.Module):
 
 
 class E2(nn.Module):
-    def __init__(self, input_nc, sep, input_size):
+    def __init__(self, input_nc, sep, input_size, depth):
         super(E2, self).__init__()
+        assert (input_size // (2 ** depth) == input_size / (2 ** depth), 'Bad depth for input size')
         self.input_nc = input_nc
         self.sep = sep
         self.input_size = input_size
-        self.feature_size = input_size // 32
+        self.feature_size = input_size // (2 ** depth)
 
-        self.full = nn.Sequential(
-            nn.Conv2d(self.input_nc, 32, 4, 2, 1),
-            nn.InstanceNorm2d(32),
-            nn.LeakyReLU(0.2, inplace=True),
-            nn.Conv2d(32, 64, 4, 2, 1),
-            nn.InstanceNorm2d(64),
-            nn.LeakyReLU(0.2, inplace=True),
-            nn.Conv2d(64, 128, 4, 2, 1),
-            nn.InstanceNorm2d(128),
-            nn.LeakyReLU(0.2, inplace=True),
-            nn.Conv2d(128, 128, 4, 2, 1),
-            nn.InstanceNorm2d(128),
-            nn.LeakyReLU(0.2, inplace=True),
-            #nn.Conv2d(128, 128, 4, 2, 1),
-            #nn.InstanceNorm2d(128),
-            #nn.LeakyReLU(0.2, inplace=True),
-            nn.Conv2d(128, self.sep, 4, 2, 1),
-            nn.InstanceNorm2d(self.sep),
-            nn.LeakyReLU(0.2),
-        )
+        if depth == 5:
+            self.full = nn.Sequential(
+                nn.Conv2d(self.input_nc, 32, 4, 2, 1),
+                nn.InstanceNorm2d(32),
+                nn.LeakyReLU(0.2, inplace=True),
+                nn.Conv2d(32, 64, 4, 2, 1),
+                nn.InstanceNorm2d(64),
+                nn.LeakyReLU(0.2, inplace=True),
+                nn.Conv2d(64, 128, 4, 2, 1),
+                nn.InstanceNorm2d(128),
+                nn.LeakyReLU(0.2, inplace=True),
+                nn.Conv2d(128, 128, 4, 2, 1),
+                nn.InstanceNorm2d(128),
+                nn.LeakyReLU(0.2, inplace=True),
+                nn.Conv2d(128, self.sep, 4, 2, 1),
+                nn.InstanceNorm2d(self.sep),
+                nn.LeakyReLU(0.2),
+            )
+        if depth == 6:
+            self.full = nn.Sequential(
+                nn.Conv2d(self.input_nc, 32, 4, 2, 1),
+                nn.InstanceNorm2d(32),
+                nn.LeakyReLU(0.2, inplace=True),
+                nn.Conv2d(32, 64, 4, 2, 1),
+                nn.InstanceNorm2d(64),
+                nn.LeakyReLU(0.2, inplace=True),
+                nn.Conv2d(64, 128, 4, 2, 1),
+                nn.InstanceNorm2d(128),
+                nn.LeakyReLU(0.2, inplace=True),
+                nn.Conv2d(128, 128, 4, 2, 1),
+                nn.InstanceNorm2d(128),
+                nn.LeakyReLU(0.2, inplace=True),
+                nn.Conv2d(128, 128, 4, 2, 1),
+                nn.InstanceNorm2d(128),
+                nn.LeakyReLU(0.2, inplace=True),
+                nn.Conv2d(128, self.sep, 4, 2, 1),
+                nn.InstanceNorm2d(self.sep),
+                nn.LeakyReLU(0.2),
+            )
 
     def forward(self, x):
         x = self.full(x)
@@ -73,32 +113,51 @@ class E2(nn.Module):
 
 
 class Decoder(nn.Module):
-    def __init__(self, output_nc, last_conv_nc, input_size):
+    def __init__(self, output_nc, last_conv_nc, input_size, depth):
         super(Decoder, self).__init__()
+        assert (input_size // (2 ** depth) == input_size / (2 ** depth), 'Bad depth for input size')
         self.output_nc = output_nc
         self.last_conv_nc = last_conv_nc
         self.input_size = input_size
-        self.feature_size = input_size // 32
+        self.feature_size = input_size // (2 ** depth)
 
-        self.main = nn.Sequential(
-            #nn.ConvTranspose2d(last_conv_nc, last_conv_nc, 4, 2, 1),
-            #nn.InstanceNorm2d(last_conv_nc),
-            #nn.ReLU(inplace=True),
-            nn.ConvTranspose2d(last_conv_nc, 256, 4, 2, 1),
-            nn.InstanceNorm2d(256),
-            nn.ReLU(inplace=True),
-            nn.ConvTranspose2d(256, 128, 4, 2, 1),
-            nn.InstanceNorm2d(128),
-            nn.ReLU(inplace=True),
-            nn.ConvTranspose2d(128, 64, 4, 2, 1),
-            nn.InstanceNorm2d(64),
-            nn.ReLU(inplace=True),
-            nn.ConvTranspose2d(64, 32, 4, 2, 1),
-            nn.InstanceNorm2d(32),
-            nn.ReLU(inplace=True),
-            nn.ConvTranspose2d(32, output_nc, 4, 2, 1),
-            nn.Tanh()
-        )
+        if depth == 5:
+            self.main = nn.Sequential(
+                nn.ConvTranspose2d(last_conv_nc, 256, 4, 2, 1),
+                nn.InstanceNorm2d(256),
+                nn.ReLU(inplace=True),
+                nn.ConvTranspose2d(256, 128, 4, 2, 1),
+                nn.InstanceNorm2d(128),
+                nn.ReLU(inplace=True),
+                nn.ConvTranspose2d(128, 64, 4, 2, 1),
+                nn.InstanceNorm2d(64),
+                nn.ReLU(inplace=True),
+                nn.ConvTranspose2d(64, 32, 4, 2, 1),
+                nn.InstanceNorm2d(32),
+                nn.ReLU(inplace=True),
+                nn.ConvTranspose2d(32, output_nc, 4, 2, 1),
+                nn.Tanh()
+            )
+        if depth == 6:
+            self.main = nn.Sequential(
+                nn.ConvTranspose2d(last_conv_nc, 512, 4, 2, 1),
+                nn.InstanceNorm2d(512),
+                nn.ReLU(inplace=True),
+                nn.ConvTranspose2d(last_conv_nc, 512, 4, 2, 1),
+                nn.InstanceNorm2d(256),
+                nn.ReLU(inplace=True),
+                nn.ConvTranspose2d(256, 128, 4, 2, 1),
+                nn.InstanceNorm2d(128),
+                nn.ReLU(inplace=True),
+                nn.ConvTranspose2d(128, 64, 4, 2, 1),
+                nn.InstanceNorm2d(64),
+                nn.ReLU(inplace=True),
+                nn.ConvTranspose2d(64, 32, 4, 2, 1),
+                nn.InstanceNorm2d(32),
+                nn.ReLU(inplace=True),
+                nn.ConvTranspose2d(32, output_nc, 4, 2, 1),
+                nn.Tanh()
+            )
 
     def forward(self, x):
         x = x.view(-1, self.last_conv_nc, self.feature_size, self.feature_size)
@@ -107,7 +166,7 @@ class Decoder(nn.Module):
 
 
 class Generator(nn.Module):
-    def __init__(self, input_nc, output_nc, last_conv_nc, sep, input_size, use_mask, preprocess):
+    def __init__(self, input_nc, output_nc, last_conv_nc, sep, input_size, depth, use_mask, preprocess):
         super(Generator, self).__init__()
         self.input_nc = input_nc + (1 if use_mask else 0)
         self.output_nc = output_nc
@@ -116,9 +175,9 @@ class Generator(nn.Module):
         self.input_size = input_size
         self.preprocess = preprocess
 
-        self.E_A = E1(self.input_nc, last_conv_nc, sep, input_size)
-        self.E_B = E2(self.input_nc, sep, input_size)
-        self.Decoder = Decoder(output_nc, last_conv_nc, input_size)
+        self.E_A = E1(self.input_nc, last_conv_nc, sep, input_size, depth)
+        self.E_B = E2(self.input_nc, sep, input_size, depth)
+        self.Decoder = Decoder(output_nc, last_conv_nc, input_size, depth)
 
     def forward(self, x, mask_in, mode=None):
         N, B, C, H, W = x.shape
@@ -166,12 +225,13 @@ class Generator(nn.Module):
 
 
 class Disc(nn.Module):
-    def __init__(self, input_nc, last_conv_nc, sep, input_size):
+    def __init__(self, input_nc, last_conv_nc, sep, input_size, depth):
         super(Disc, self).__init__()
+        assert (input_size // (2 ** depth) == input_size / (2 ** depth), 'Bad depth for input size')
         self.input_nc = input_nc
         self.last_conv_nc = last_conv_nc
         self.sep = sep
-        self.feature_size = input_size // 32
+        self.feature_size = input_size // (2 ** depth)
 
         self.classify = nn.Sequential(
             nn.Linear((last_conv_nc - self.sep) * self.feature_size * self.feature_size, last_conv_nc),
@@ -188,14 +248,15 @@ class Disc(nn.Module):
 
 
 class Discriminator(nn.Module):
-    def __init__(self, input_nc, last_conv_nc, input_size):
+    def __init__(self, input_nc, last_conv_nc, input_size, depth):
         super(Discriminator, self).__init__()
+        assert (input_size // (2 ** depth) == input_size / (2 ** depth), 'Bad depth for input size')
         self.input_nc = input_nc
         self.last_conv_nc = last_conv_nc
         self.input_size = input_size
-        self.feature_size = input_size // 32
+        self.feature_size = input_size // (2 ** depth)
 
-        self.E = E1(input_nc, last_conv_nc, 0, self.input_size)
+        self.E = E1(input_nc, last_conv_nc, 0, self.input_size, depth)
         self.linear = nn.Linear(last_conv_nc * self.feature_size * self.feature_size, 1)
         self.activation = nn.Sigmoid()
 
@@ -206,17 +267,19 @@ class Discriminator(nn.Module):
         return x
 
 class Discriminator2(nn.Module):
-    def __init__(self, input_nc, last_conv_nc, input_size):
+    def __init__(self, input_nc, last_conv_nc, input_size, depth):
         super(Discriminator2, self).__init__()
+        assert (input_size // (2 ** depth) == input_size / (2 ** depth), 'Bad depth for input size')
         self.input_nc = input_nc
         self.last_conv_nc = last_conv_nc
         self.input_size = input_size
-        self.feature_size = input_size // 32
+        self.feature_size = input_size // (2 ** depth)
 
-        self.Ea = E1(input_nc, last_conv_nc, 0, self.input_size)
-        self.linear = nn.Linear(2*(last_conv_nc * self.feature_size * self.feature_size), 1024)
-        self.linear = nn.Linear(1024, 1)
-        self.activation = nn.Sigmoid()
+        self.Ea = E1(input_nc, last_conv_nc, 0, self.input_size, depth)
+        self.linear1 = nn.Linear(2*(last_conv_nc * self.feature_size * self.feature_size), 1)
+        #self.relu = nn.ReLU()
+        #self.linear2 = nn.Linear(1024, 1)
+        self.sigmoid = nn.Sigmoid()
 
     def forward(self, x):
         x1 = x[:, 0, :, :, :]
@@ -224,25 +287,31 @@ class Discriminator2(nn.Module):
 
         x1 = self.Ea(x1)
         x2 = self.Ea(x2)
-        x = self.linear(torch.cat([x1, x2], dim=1))
-        x = self.activation(x)
+        x = self.linear1(torch.cat([x1, x2], dim=1))
+        #x = self.relu(x)
+        #x = self.linear2(x)
+        x = self.sigmoid(x)
         return x
 
 
 class Classifier200(nn.Module):
-    def __init__(self, input_nc, last_conv_nc, input_size):
+    def __init__(self, input_nc, last_conv_nc, input_size, depth):
         super(Classifier200, self).__init__()
+        assert(input_size // (2 ** depth) == input_size / (2 ** depth), 'Bad depth for input size')
         self.input_nc = input_nc
         self.last_conv_nc = last_conv_nc
         self.input_size = input_size
-        self.feature_size = input_size // 32
+        self.feature_size = input_size // (2 ** depth)
 
-        self.E = E1(input_nc, last_conv_nc, 0, self.input_size)
-        self.linear = nn.Linear(last_conv_nc * self.feature_size * self.feature_size, 1024)
-        self.linear = nn.Linear(1024, 200)
-        self.activation = nn.Softmax()
+        self.E = E1(input_nc, last_conv_nc, 0, self.input_size, depth)
+        self.linear1 = nn.Linear(last_conv_nc * self.feature_size * self.feature_size, 1024)
+        self.relu = nn.ReLU
+        self.linear2 = nn.Linear(1024, 200)
+        self.softmax = nn.Softmax()
 
     def forward(self, x):
         x = self.E(x)
-        x = self.activation(x)
+        x = self.relu(x)
+        x = self.linear2(x)
+        x = self.softmax(x)
         return x

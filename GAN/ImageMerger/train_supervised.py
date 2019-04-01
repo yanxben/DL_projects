@@ -24,7 +24,7 @@ import time
 import random
 
 import matplotlib
-matplotlib.use('Agg')
+#matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import torch
 from torch import optim
@@ -48,15 +48,17 @@ def im2tensor(i):
 
 testset = list(range(10)) # [0, 4, 5, 6, 206, 210, 213, 405, 407, 435]
 testlen = len(testset)
+batch_size = 64
+imsize = 96
 if __name__ == '__main__':
     t0 = time.time()
-    opt = TrainOptions().parse()   # get training options
-    dataset, caltech_data = create_dataset_caltech_ucsd(opt)  # create a dataset given opt.dataset_mode and other options
+    #opt = TrainOptions().parse()   # get training options
+    dataset, caltech_data, caltech_labels = create_dataset_caltech_ucsd('C:/Datasets/Caltech-UCSD-Birds-200', batch_size, imsize=imsize)  # create a dataset given opt.dataset_mode and other options
     dataset_size = len(dataset)    # get the number of images in the dataset.
     print('The number of training epochs = %d' % dataset_size)
     print('The number of training images = %d' % caltech_data.shape[0])
 
-    stl10_data_test = caltech_data[testset]
+    #stl10_data_test = caltech_data[testset]
     # model_test_input = {'real_G': torch.Tensor(stl10_data_test[:, :3, :, :]),
     #                     'mask_G': torch.Tensor(stl10_data_test[:, 3, :, :]),
     #                     'real_D': torch.Tensor(stl10_data_test[:, :3, :, :]),
@@ -65,7 +67,7 @@ if __name__ == '__main__':
     # plt.figure('test merge', figsize=(1920 / 100, 1080 / 100), dpi=100)
     # plt.figure('test reflect', figsize=(1920 / 100, 1080 / 100), dpi=100)
     #
-    # plt.figure('test merge')
+    plt.figure('test merge')
     # for i in range(testlen//2):
     #     plt.subplot(testlen//2, 6, i * 6 + 1)
     #     plt.imshow(model_test_input['real_G'][2*i].permute([1, 2, 0]))
@@ -75,11 +77,11 @@ if __name__ == '__main__':
     #     plt.subplot(testlen//2, 6, i * 6 + 4)
     #     plt.subplot(testlen//2, 6, i * 6 + 5)
     #     plt.subplot(testlen//2, 6, i * 6 + 6)
-    if not os.path.isdir(os.path.join(opt.plots_dir, opt.name)):
-        os.mkdir(os.path.join(opt.plots_dir, opt.name))
+    #if not os.path.isdir(os.path.join(opt.plots_dir, opt.name)):
+    #    os.mkdir(os.path.join(opt.plots_dir, opt.name))
 
     # Declare model, optimizer, loss
-    model = Discriminator2(3, 512, 96)      # create a model given opt.model and other options
+    model = Discriminator2(caltech_data.shape[1], 512, imsize, depth=5).cuda()     # create a model given opt.model and other options
     optimizer = optim.Adam(model.parameters())
     criterion = nn.BCELoss()
 
@@ -90,22 +92,29 @@ if __name__ == '__main__':
         epoch_start_time = time.time()  # timer for entire epoch
         epoch_iter = 0                  # the number of training iterations in current epoch, reset to 0 every epoch
         num_iterations = 0
+        running_loss = 0
         for i, data in enumerate(dataset):  # inner loop within one epoch
-            if data['image'].shape[0] < opt.batch_size:
+            if data['images'].shape[0] < batch_size:
                 continue  # ignore tail of data if tail is smaller than batch_size
 
             images_a = data['images']
             images_b = torch.zeros_like(images_a)
-            for k in range(opt.batch_size):
+            for k in range(batch_size):
                 label_a = data['labels'][k]
                 if random.randint(0,1) < 0.5:
-                    indices = (caltech_data['labels'] == label_a).non_zero().squeeze()
+                    indices = (caltech_labels == label_a).nonzero()
                     data['labels'][k] = 1
                 else:
-                    indices = (caltech_data['labels'] != label_a).non_zero().squeeze()
+                    indices = (caltech_labels != label_a).nonzero()
                     data['labels'][k] = 0
                 idx = indices[torch.randint(indices.numel(), (1,))]
-                images_b[k] = caltech_data['images'][idx]
+                images_b[k] = caltech_data[idx]
+
+            for m in range(6):
+                plt.subplot(2, 6, m + 1)
+                plt.imshow(images_a[m].permute([1, 2, 0]))
+                plt.subplot(2, 6, m + 7)
+                plt.imshow(images_b[m].permute([1, 2, 0]))
 
             data['images'] = torch.cat([images_a.unsqueeze(1), images_b.unsqueeze(1)], dim=1)
             total_iters += 1
@@ -115,8 +124,8 @@ if __name__ == '__main__':
             optimizer.zero_grad()
 
             # Run train iteration
-            yhat = model(data['images'])
-            loss = criterion(yhat, data['labels'])
+            yhat = model(data['images'].type(torch.cuda.FloatTensor))
+            loss = criterion(yhat, data['labels'].type(torch.cuda.FloatTensor))
             loss.backward()
             optimizer.step()
 
@@ -127,7 +136,6 @@ if __name__ == '__main__':
         if epoch % 1 == 0:
             # print statistics
             print('Epoch {:d}: loss {:.4f}'.format(epoch, running_loss / num_iterations))
-            running_loss = 0
 
             print('saving the model at the end of epoch %d, iters %d' % (epoch, total_iters))
             #save_suffix = 'epoch_%d' % epoch

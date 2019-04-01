@@ -28,6 +28,7 @@ def load_caltech_data(path, imsize=128, type='pickle', mode='cropped'):
 
     n = 0
     for species in os.listdir(caltech_annotations_path):
+        print('\r{}'.format(species))
         species_images_path = os.path.join(caltech_images_path, species)
         species_annotations_path = os.path.join(caltech_annotations_path, species)
         for image in os.listdir(species_annotations_path):
@@ -64,30 +65,32 @@ def load_caltech_data(path, imsize=128, type='pickle', mode='cropped'):
                     seg[max(0,top):min(top+delta, H), max(0,left):min(left+delta, W)]
 
                 images[n] = scipy.misc.imresize(image_delta, [imsize, imsize, 3]).transpose(2, 0, 1) / 255
-                masks[n, 0] = skimage.transform.resize(mask_delta, [imsize, imsize])
+                #images[n] = skimage.transform.resize(mask_delta, [imsize, imsize], anti_aliasing=True, preserve_range=True)
+                masks[n, 0] = skimage.transform.resize(mask_delta, [imsize, imsize], anti_aliasing=True, preserve_range=True)
 
-                plt.subplot(2, 2, 1)
-                plt.imshow(image_delta)
-                plt.subplot(2, 2, 2)
-                plt.imshow(mask_delta)
-                plt.subplot(2, 2, 3)
-                plt.imshow(images[n].transpose(1,2,0))
-                plt.subplot(2, 2, 4)
-                plt.imshow(masks[n, 0, :, :])
+                # plt.subplot(2, 2, 1)
+                # plt.imshow(image_delta)
+                # plt.subplot(2, 2, 2)
+                # plt.imshow(mask_delta)
+                # plt.subplot(2, 2, 3)
+                # plt.imshow(images[n].transpose(1,2,0))
+                # plt.subplot(2, 2, 4)
+                # plt.imshow(masks[n, 0, :, :])
 
             labels[n] = int(species.split('.')[0])
             n += 1
+    print('\rdone')
     return images, masks, labels
 
 
-def create_data_caltech_ucsd(path, batch_size, size=128, type='pickle', mode='cropped'):
-    images, masks, labels = load_caltech_data(path, size, type, mode)
+def create_dataset_caltech_ucsd(path, batch_size, imsize=128, type='pickle', mode='cropped'):
+    images, masks, labels = load_caltech_data(path, imsize, type, mode)
 
     caltech_data = np.concatenate([images, masks], axis=1).astype(np.float32)
     dataset = ArrayDataset(caltech_data, labels=labels)
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
-    return dataloader, caltech_data, labels
+    return dataloader, torch.from_numpy(caltech_data), torch.from_numpy(labels)
 
 
 if __name__ == '__main__':
