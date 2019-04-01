@@ -28,7 +28,7 @@ def load_caltech_data(path, imsize=128, type='pickle', mode='cropped'):
 
     n = 0
     for species in os.listdir(caltech_annotations_path):
-        print('\r{}'.format(species))
+        print('{} {}'.format(species, len(os.listdir(os.path.join(caltech_annotations_path, species)))))
         species_images_path = os.path.join(caltech_images_path, species)
         species_annotations_path = os.path.join(caltech_annotations_path, species)
         for image in os.listdir(species_annotations_path):

@@ -4,7 +4,7 @@ import torch.nn as nn
 class E1(nn.Module):
     def __init__(self, input_nc, last_conv_nc, sep, input_size, depth):
         super(E1, self).__init__()
-        assert (input_size // (2 ** depth) == input_size / (2 ** depth), 'Bad depth for input size')
+        assert input_size // (2 ** depth) == input_size / (2 ** depth), 'Bad depth for input size'
         self.input_nc = input_nc
         self.last_conv_nc = last_conv_nc
         self.sep = sep
@@ -60,7 +60,7 @@ class E1(nn.Module):
 class E2(nn.Module):
     def __init__(self, input_nc, sep, input_size, depth):
         super(E2, self).__init__()
-        assert (input_size // (2 ** depth) == input_size / (2 ** depth), 'Bad depth for input size')
+        assert input_size // (2 ** depth) == input_size / (2 ** depth), 'Bad depth for input size'
         self.input_nc = input_nc
         self.sep = sep
         self.input_size = input_size
@@ -115,7 +115,7 @@ class E2(nn.Module):
 class Decoder(nn.Module):
     def __init__(self, output_nc, last_conv_nc, input_size, depth):
         super(Decoder, self).__init__()
-        assert (input_size // (2 ** depth) == input_size / (2 ** depth), 'Bad depth for input size')
+        assert input_size // (2 ** depth) == input_size / (2 ** depth), 'Bad depth for input size'
         self.output_nc = output_nc
         self.last_conv_nc = last_conv_nc
         self.input_size = input_size
@@ -143,7 +143,7 @@ class Decoder(nn.Module):
                 nn.ConvTranspose2d(last_conv_nc, 512, 4, 2, 1),
                 nn.InstanceNorm2d(512),
                 nn.ReLU(inplace=True),
-                nn.ConvTranspose2d(last_conv_nc, 512, 4, 2, 1),
+                nn.ConvTranspose2d(512, 256, 4, 2, 1),
                 nn.InstanceNorm2d(256),
                 nn.ReLU(inplace=True),
                 nn.ConvTranspose2d(256, 128, 4, 2, 1),
@@ -166,9 +166,9 @@ class Decoder(nn.Module):
 
 
 class Generator(nn.Module):
-    def __init__(self, input_nc, output_nc, last_conv_nc, sep, input_size, depth, use_mask, preprocess):
+    def __init__(self, input_nc, output_nc, last_conv_nc, sep, input_size, depth, preprocess):
         super(Generator, self).__init__()
-        self.input_nc = input_nc + (1 if use_mask else 0)
+        self.input_nc = input_nc
         self.output_nc = output_nc
         self.last_conv_nc = last_conv_nc
         self.sep = sep
@@ -227,7 +227,7 @@ class Generator(nn.Module):
 class Disc(nn.Module):
     def __init__(self, input_nc, last_conv_nc, sep, input_size, depth):
         super(Disc, self).__init__()
-        assert (input_size // (2 ** depth) == input_size / (2 ** depth), 'Bad depth for input size')
+        assert input_size // (2 ** depth) == input_size / (2 ** depth), 'Bad depth for input size'
         self.input_nc = input_nc
         self.last_conv_nc = last_conv_nc
         self.sep = sep
@@ -250,7 +250,7 @@ class Disc(nn.Module):
 class Discriminator(nn.Module):
     def __init__(self, input_nc, last_conv_nc, input_size, depth):
         super(Discriminator, self).__init__()
-        assert (input_size // (2 ** depth) == input_size / (2 ** depth), 'Bad depth for input size')
+        assert input_size // (2 ** depth) == input_size / (2 ** depth), 'Bad depth for input size'
         self.input_nc = input_nc
         self.last_conv_nc = last_conv_nc
         self.input_size = input_size
@@ -258,46 +258,76 @@ class Discriminator(nn.Module):
 
         self.E = E1(input_nc, last_conv_nc, 0, self.input_size, depth)
         self.linear = nn.Linear(last_conv_nc * self.feature_size * self.feature_size, 1)
-        self.activation = nn.Sigmoid()
+        #self.activation = nn.Sigmoid()
 
     def forward(self, x):
         x = self.E(x)
         x = self.linear(x)
-        x = self.activation(x)
+        #x = self.activation(x)
         return x
 
-class Discriminator2(nn.Module):
+class DiscriminatorPair(nn.Module):
     def __init__(self, input_nc, last_conv_nc, input_size, depth):
-        super(Discriminator2, self).__init__()
-        assert (input_size // (2 ** depth) == input_size / (2 ** depth), 'Bad depth for input size')
+        super(DiscriminatorPair, self).__init__()
+        assert input_size // (2 ** depth) == input_size / (2 ** depth), 'Bad depth for input size'
         self.input_nc = input_nc
         self.last_conv_nc = last_conv_nc
         self.input_size = input_size
         self.feature_size = input_size // (2 ** depth)
 
-        self.Ea = E1(input_nc, last_conv_nc, 0, self.input_size, depth)
-        self.linear1 = nn.Linear(2*(last_conv_nc * self.feature_size * self.feature_size), 1)
-        #self.relu = nn.ReLU()
-        #self.linear2 = nn.Linear(1024, 1)
+        self.E = E1(input_nc, last_conv_nc, 0, self.input_size, depth)
+        self.linear1 = nn.Linear(last_conv_nc * self.feature_size * self.feature_size, 512)
+        self.relu = nn.ReLU()
+        self.linear2 = nn.Linear(512, 256)
         self.sigmoid = nn.Sigmoid()
 
-    def forward(self, x):
+    def forward(self, x, use_activation=True):
         x1 = x[:, 0, :, :, :]
         x2 = x[:, 1, :, :, :]
 
-        x1 = self.Ea(x1)
-        x2 = self.Ea(x2)
-        x = self.linear1(torch.cat([x1, x2], dim=1))
-        #x = self.relu(x)
-        #x = self.linear2(x)
-        x = self.sigmoid(x)
-        return x
+        x1, x2 = self.E(x1), self.E(x2)
+        x1, x2 = self.linear1(x1), self.linear1(x2)
+        x1, x2 = self.relu(x1), self.relu(x2)
+
+        x1, x2 = self.linear2(x1), self.linear2(x2)
+        if use_activation:
+            x1, x2 = self.sigmoid(x1), self.sigmoid(x2)
+        return torch.cat([x1.unsqueeze(1), x2.unsqueeze(1)], dim=1)
+
+
+class DiscriminatorTriplet(nn.Module):
+    def __init__(self, input_nc, last_conv_nc, input_size, depth):
+        super(DiscriminatorTriplet, self).__init__()
+        assert input_size // (2 ** depth) == input_size / (2 ** depth), 'Bad depth for input size'
+        self.input_nc = input_nc
+        self.last_conv_nc = last_conv_nc
+        self.input_size = input_size
+        self.feature_size = input_size // (2 ** depth)
+
+        self.E = E1(input_nc, last_conv_nc, 0, self.input_size, depth)
+        self.linear1 = nn.Linear(last_conv_nc * self.feature_size * self.feature_size, 256)
+        #self.relu = nn.ReLU()
+        #self.linear2 = nn.Linear(512, 256)
+        #self.sigmoid = nn.Sigmoid()
+
+    def forward(self, x, use_activation=True):
+        x1 = x[:, 0, :, :, :]
+        x2 = x[:, 1, :, :, :]
+        x3 = x[:, 2, :, :, :]
+
+        x1, x2, x3 = self.E(x1), self.E(x2), self.E(x3)
+        x1, x2, x3 = self.linear1(x1), self.linear1(x2), self.linear1(x3)
+        #x1, x2, x3 = self.relu(x1), self.relu(x2), self.relu(x3)
+        #x1, x2, x3 = self.linear2(x1), self.linear2(x2), self.linear2(x3)
+        #if use_activation:
+        #    x1, x2, x3 = self.sigmoid(x1), self.sigmoid(x2), self.sigmoid(x3)
+        return torch.cat([x1.unsqueeze(1), x2.unsqueeze(1), x3.unsqueeze(1)], dim=1)
 
 
 class Classifier200(nn.Module):
     def __init__(self, input_nc, last_conv_nc, input_size, depth):
         super(Classifier200, self).__init__()
-        assert(input_size // (2 ** depth) == input_size / (2 ** depth), 'Bad depth for input size')
+        assert input_size // (2 ** depth) == input_size / (2 ** depth), 'Bad depth for input size'
         self.input_nc = input_nc
         self.last_conv_nc = last_conv_nc
         self.input_size = input_size
@@ -307,11 +337,63 @@ class Classifier200(nn.Module):
         self.linear1 = nn.Linear(last_conv_nc * self.feature_size * self.feature_size, 1024)
         self.relu = nn.ReLU
         self.linear2 = nn.Linear(1024, 200)
-        self.softmax = nn.Softmax()
+        #self.softmax = nn.Softmax()
 
     def forward(self, x):
         x = self.E(x)
         x = self.relu(x)
         x = self.linear2(x)
-        x = self.softmax(x)
+        #x = self.softmax(x)
         return x
+
+
+class AutoEncoder2(nn.Module):
+    def __init__(self, input_nc, output_nc, last_conv_nc, sep, input_size, depth, preprocess):
+        super(AutoEncoder2, self).__init__()
+        self.input_nc = input_nc
+        self.output_nc = output_nc
+        self.last_conv_nc = last_conv_nc
+        self.sep = sep
+        self.input_size = input_size
+        self.preprocess = preprocess
+
+        self.E = E1(self.input_nc, last_conv_nc, sep, input_size, depth)
+        self.Decoder = Decoder(output_nc, last_conv_nc, input_size, depth)
+
+    def forward(self, x, mask_in, mode=None):
+        N, B, C, H, W = x.shape
+        if mode is None:
+            mask_in1 = mask_in[:, 0, :, :, :]
+            mask_in2 = mask_in[:, 1, :, :, :]
+        else:
+            mask_in1 = mask_in
+            mask_in2 = mask_in
+
+        x1 = x[:, 0, :, :, :]
+        x2 = x[:, 1, :, :, :]
+
+        if mode is None or mode == 0:
+            x1_A = x1
+            x1_A = torch.cat([x1_A, mask_in1[:, 0, :, :].unsqueeze(1)], dim=1)
+            x2_B = torch.cat([x2, mask_in2[:, 0, :, :].unsqueeze(1)], dim=1)
+            e_x1_A = self.E(x1_A)
+            e_x2_B = self.E(x2_B)
+            z1 = torch.cat([e_x1_A, e_x2_B], dim=1)
+            y1 = self.Decoder(z1)
+        if mode is None or mode == 1:
+            x2_A = x2
+            x2_A = torch.cat([x2_A, mask_in2[:, 0, :, :].unsqueeze(1)], dim=1)
+            x1_B = torch.cat([x1, mask_in1[:, 0, :, :].unsqueeze(1)], dim=1)
+            e_x2_A = self.E(x2_A)
+            e_x1_B = self.E(x1_B)
+            z2 = torch.cat([e_x2_A, e_x1_B], dim=1)
+            y2 = self.Decoder(z2)
+
+        if mode is None:
+            y = torch.cat([y1.unsqueeze(1), y2.unsqueeze(1)], dim=1)
+        elif mode == 0:
+            y = y1
+        else:
+            y = y2
+
+        return y
