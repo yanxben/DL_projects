@@ -166,7 +166,7 @@ class Decoder(nn.Module):
 
 
 class Generator(nn.Module):
-    def __init__(self, input_nc, output_nc, last_conv_nc, sep, input_size, depth, preprocess):
+    def __init__(self, input_nc, output_nc, last_conv_nc, sep, input_size, depth, preprocess=False):
         super(Generator, self).__init__()
         self.input_nc = input_nc
         self.output_nc = output_nc
@@ -192,10 +192,10 @@ class Generator(nn.Module):
         x2 = x[:, 1, :, :, :]
 
         if mode is None or mode == 0:
-            if self.preprocess:
-                x1_A = (1-mask_in1) * x1 # + mask_in1 * torch.mean(x1, dim=1, keepdim=True)
-            else:
-                x1_A = x1
+            # if self.preprocess:
+            #     x1_A = (1-mask_in1) * x1 # + mask_in1 * torch.mean(x1, dim=1, keepdim=True)
+            # else:
+            x1_A = x1
             x1_A = torch.cat([x1_A, mask_in1[:, 0, :, :].unsqueeze(1)], dim=1)
             x2_B = torch.cat([x2, mask_in2[:, 0, :, :].unsqueeze(1)], dim=1)
             e_x1_A = self.E_A(x1_A)
@@ -203,10 +203,10 @@ class Generator(nn.Module):
             z1 = torch.cat([e_x1_A, e_x2_B], dim=1)
             y1 = self.Decoder(z1)
         if mode is None or mode == 1:
-            if self.preprocess:
-                x2_A = (1-mask_in2) * x2 # + mask_in2 * torch.mean(x2, dim=1, keepdim=True)
-            else:
-                x2_A = x2
+            # if self.preprocess:
+            #     x2_A = (1-mask_in2) * x2 # + mask_in2 * torch.mean(x2, dim=1, keepdim=True)
+            # else:
+            x2_A = x2
             x2_A = torch.cat([x2_A, mask_in2[:, 0, :, :].unsqueeze(1)], dim=1)
             x1_B = torch.cat([x1, mask_in1[:, 0, :, :].unsqueeze(1)], dim=1)
             e_x2_A = self.E_A(x2_A)
@@ -266,9 +266,10 @@ class Discriminator(nn.Module):
         #x = self.activation(x)
         return x
 
-class DiscriminatorPair(nn.Module):
+
+class DiscriminatorReID(nn.Module):
     def __init__(self, input_nc, last_conv_nc, input_size, depth):
-        super(DiscriminatorPair, self).__init__()
+        super(DiscriminatorReID, self).__init__()
         assert input_size // (2 ** depth) == input_size / (2 ** depth), 'Bad depth for input size'
         self.input_nc = input_nc
         self.last_conv_nc = last_conv_nc
@@ -277,22 +278,14 @@ class DiscriminatorPair(nn.Module):
 
         self.E = E1(input_nc, last_conv_nc, 0, self.input_size, depth)
         self.linear1 = nn.Linear(last_conv_nc * self.feature_size * self.feature_size, 512)
-        self.relu = nn.ReLU()
-        self.linear2 = nn.Linear(512, 256)
         self.sigmoid = nn.Sigmoid()
 
-    def forward(self, x, use_activation=True):
-        x1 = x[:, 0, :, :, :]
-        x2 = x[:, 1, :, :, :]
-
-        x1, x2 = self.E(x1), self.E(x2)
-        x1, x2 = self.linear1(x1), self.linear1(x2)
-        x1, x2 = self.relu(x1), self.relu(x2)
-
-        x1, x2 = self.linear2(x1), self.linear2(x2)
+    def forward(self, x, use_activation=False):
+        x = self.E(x)
+        x = self.linear1(x)
         if use_activation:
-            x1, x2 = self.sigmoid(x1), self.sigmoid(x2)
-        return torch.cat([x1.unsqueeze(1), x2.unsqueeze(1)], dim=1)
+            x = self.sigmoid(x)
+        return x
 
 
 class DiscriminatorTriplet(nn.Module):
@@ -308,9 +301,9 @@ class DiscriminatorTriplet(nn.Module):
         self.linear1 = nn.Linear(last_conv_nc * self.feature_size * self.feature_size, 256)
         #self.relu = nn.ReLU()
         #self.linear2 = nn.Linear(512, 256)
-        #self.sigmoid = nn.Sigmoid()
+        self.sigmoid = nn.Sigmoid()
 
-    def forward(self, x, use_activation=True):
+    def forward(self, x, use_activation=False):
         x1 = x[:, 0, :, :, :]
         x2 = x[:, 1, :, :, :]
         x3 = x[:, 2, :, :, :]
@@ -319,8 +312,8 @@ class DiscriminatorTriplet(nn.Module):
         x1, x2, x3 = self.linear1(x1), self.linear1(x2), self.linear1(x3)
         #x1, x2, x3 = self.relu(x1), self.relu(x2), self.relu(x3)
         #x1, x2, x3 = self.linear2(x1), self.linear2(x2), self.linear2(x3)
-        #if use_activation:
-        #    x1, x2, x3 = self.sigmoid(x1), self.sigmoid(x2), self.sigmoid(x3)
+        if use_activation:
+            x1, x2, x3 = self.sigmoid(x1), self.sigmoid(x2), self.sigmoid(x3)
         return torch.cat([x1.unsqueeze(1), x2.unsqueeze(1), x3.unsqueeze(1)], dim=1)
 
 
