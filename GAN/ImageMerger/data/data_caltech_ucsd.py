@@ -12,15 +12,20 @@ import torch.utils.data
 from data.data_utils import ArrayDataset
 from util.caltech_images import fit_square
 
-def load_caltech_data(path, imsize=128, type='pickle', mode='cropped'):
+
+def load_caltech_data(path, imsize=128, type='pickle', mode='cropped', min_count=5, size=None):
     assert type == 'pickle' or mode == 'original', 'caltech ucsd dataset in type mat cannot be cropped'
     caltech_images_path = os.path.join(path, 'images')
     caltech_annotations_path = os.path.join(path, 'annotations-' + type)
 
     N = 0
     for species in os.listdir(caltech_annotations_path):
-        N += len(os.listdir(os.path.join(caltech_annotations_path, species)))
+        count = len(os.listdir(os.path.join(caltech_annotations_path, species)))
+        if count >= min_count:
+            N += len(os.listdir(os.path.join(caltech_annotations_path, species)))
 
+    if size is not None:
+        N = min(N, size)
     if mode == 'cropped':
         images = np.zeros((N, 3, imsize, imsize))
         masks = np.zeros((N, 1, imsize, imsize))
@@ -28,7 +33,10 @@ def load_caltech_data(path, imsize=128, type='pickle', mode='cropped'):
 
     n = 0
     for species in os.listdir(caltech_annotations_path):
-        print('{} {}'.format(species, len(os.listdir(os.path.join(caltech_annotations_path, species)))))
+        count = len(os.listdir(os.path.join(caltech_annotations_path, species)))
+        print('{} {}'.format(species, count))
+        if count < min_count:
+            continue
         species_images_path = os.path.join(caltech_images_path, species)
         species_annotations_path = os.path.join(caltech_annotations_path, species)
         for image in os.listdir(species_annotations_path):
@@ -79,12 +87,16 @@ def load_caltech_data(path, imsize=128, type='pickle', mode='cropped'):
 
             labels[n] = int(species.split('.')[0])
             n += 1
-    print('\rdone')
+            if n == N:
+                print('quitting with reduced dataset')
+                return images, masks, labels
+
+    print('done')
     return images, masks, labels
 
 
-def create_dataset_caltech_ucsd(path, batch_size, imsize=128, type='pickle', mode='cropped'):
-    images, masks, labels = load_caltech_data(path, imsize, type, mode)
+def create_dataset_caltech_ucsd(path, batch_size, imsize=128, type='pickle', mode='cropped', size=None):
+    images, masks, labels = load_caltech_data(path, imsize, type, mode, size=size)
 
     caltech_data = np.concatenate([images, masks], axis=1).astype(np.float32)
     dataset = ArrayDataset(caltech_data, labels=labels)
