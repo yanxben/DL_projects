@@ -321,16 +321,16 @@ class mergeganmodel(BaseModel):
 
         # ReID
         # real
-        # real_a_embed = self.netReID(self.real_a)
-        # real_p_embed = self.netReID(self.real_G[:,self.B])
-        # real_n_embed = self.netReID(self.real_n)
-        # loss_ReID_real = self.criterionReID1(real_a_embed, real_p_embed, real_n_embed)
-        # # fake
-        # fake_p_embed = self.netReID(self.fake_G[:,self.A].detach())
-        # loss_ReID_fake = self.criterionReID1(real_a_embed, real_p_embed, fake_p_embed)
-        # # Combine loss and calculate gradients
-        # self.loss_ReID = (loss_ReID_real + loss_ReID_fake) * 0.5
-        # self.loss_ReID.backward()
+        real_a_embed = self.netReID(self.real_a)
+        real_p_embed = self.netReID(self.real_G[:,self.B])
+        real_n_embed = self.netReID(self.real_n)
+        loss_ReID_real = self.criterionReID1(real_a_embed, real_p_embed, real_n_embed)
+        # fake
+        fake_p_embed = self.netReID(self.fake_G[:,self.A].detach())
+        loss_ReID_fake = self.criterionReID1(real_a_embed, real_p_embed, fake_p_embed)
+        # Combine loss and calculate gradients
+        self.loss_ReID = (loss_ReID_real + loss_ReID_fake) * 0.5
+        self.loss_ReID.backward()
 
     def backward_G(self):
         """Calculate the loss for generator G"""
@@ -341,10 +341,9 @@ class mergeganmodel(BaseModel):
         self.loss_GDisc = self.criterionGAN(self.netDisc(fake_D), True)
 
         # ReID loss ReID(anchor, G(A,B))
-        # real_a_embed = self.netReID(self.real_a)
-        # fake_p_embed = self.netReID(self.fake_G[:,self.A])
-        # self.loss_GReID = torch.mean(self.criterionReID2(real_a_embed, fake_p_embed)) * 0.1
-        self.loss_GReID = 0
+        real_a_embed = self.netReID(self.real_a)
+        fake_p_embed = self.netReID(self.fake_G[:,self.A])
+        self.loss_GReID = torch.mean(self.criterionReID2(real_a_embed, fake_p_embed)) * 0.1
 
         # GAN Background loss
         if self.opt.background:
