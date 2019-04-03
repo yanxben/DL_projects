@@ -49,8 +49,8 @@ if __name__ == '__main__':
     #dataset, stl10_data = create_dataset_stl10_bird(opt)  # create a dataset given opt.dataset_mode and other options
     if socket.gethostbyname() == 'YABENN-P50':
         caltech_path = 'C:/Datasets/Caltech-UCSD-Birds-200'
-    elif socket.gethostbyname() == '':
-        caltech_path = ''
+    elif socket.gethostbyname() == 'ubuntu-1':
+        caltech_path = '~/Datasets/Caltech-UCSD-Birds-200'
     _, caltech_data, caltech_labels = create_dataset_caltech_ucsd(caltech_path, opt.batch_size, imsize=opt.input_size, size=500)  # create a dataset given opt.dataset_mode and other options
     #dataset_size = caltech_data.shape[0]  #len(dataset)    # get the number of images in the dataset.
     dataset_size, C, H, W = caltech_data.shape
