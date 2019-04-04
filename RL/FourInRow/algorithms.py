@@ -1,11 +1,11 @@
 import sys
 import numpy as np
 
-from utils_game import Game, _valid_action, _get_action, _swap_state, _sim_step, _game_end
+from utils_game import Game, _valid_action, _get_action, _swap_state, _sim_step
 
 BOARD_W = 7
 BOARD_H = 6
-SEARCH_DEPTH = 4
+SEARCH_DEPTH = 2
 
 PLAYER = 1
 OPPONENT = -1
@@ -107,7 +107,7 @@ def evaluateScore(state):
     for col in range(BOARD_H):
         if _valid_action(state, col):
             row, _ = _get_action(state, col)
-            score = scoreOfCoordinate2(state, row, col)
+            score = scoreOfCoordinate(state, row, col)
             # If winner move return WIN
             if score[0] == WIN:
                 return WIN
@@ -126,76 +126,8 @@ def evaluateScore(state):
     return sum(score_arr) / BOARD_W
 
 
-# Method that evaluates if a given coordinate has a possible win
-# for any player. Each coordinate evaluates if a possible win can be
-# found vertically, horizontally or in both diagonals.
-#
-"""
-def scoreOfCoordinate(state, row, col):
-    score = [0,0]
 
-    for player in range(2):
-        # Check vertical line
-        score[player] += scoreOfLine(
-            state=state,
-            row=row,
-            col=col,
-            rowIncrement=-1,
-            columnIncrement=0,
-            firstRowCondition=-1,
-            secondRowCondition=BOARD_H,
-            firstColumnCondition=None,
-            secondColumnCondition=None,
-            player=player,
-        )
-
-        # Check horizontal line
-        score[player] += scoreOfLine(
-            state=state,
-            row=row,
-            col=col,
-            rowIncrement=0,
-            columnIncrement=-1,
-            firstRowCondition=None,
-            secondRowCondition=None,
-            firstColumnCondition=-1,
-            secondColumnCondition=BOARD_W,
-            player=player
-        )
-
-        # Check diagonal /
-        score[player] += scoreOfLine(
-            state=state,
-            row=row,
-            col=col,
-            rowIncrement=-1,
-            columnIncrement=1,
-            firstRowCondition=-1,
-            secondRowCondition=BOARD_H,
-            firstColumnCondition=BOARD_W,
-            secondColumnCondition=-1,
-            player=player
-        )
-
-        # Check diagonal \
-        score[player] += scoreOfLine(
-            state=state,
-            row=row,
-            col=col,
-            rowIncrement=-1,
-            columnIncrement=-1,
-            firstRowCondition=-1,
-            secondRowCondition=BOARD_H,
-            firstColumnCondition=-1,
-            secondColumnCondition=BOARD_W,
-            player=player
-        )
-
-    return score
-"""
-
-
-def scoreOfCoordinate2(state, row, col, debug=False):
+def scoreOfCoordinate(state, row, col, debug=False):
 
     score = [0,0]
     offsets = np.array(range(4))
@@ -252,97 +184,11 @@ def scoreOfCoordinate2(state, row, col, debug=False):
         return score
 
 
-# Method that searches through a line (vertical, horizontal or
-# diagonal) to get the heuristic value of the given coordinate.
-#
-"""
-def scoreOfLine(
-        state=state,
-        row=row,
-        col=col,
-        rowIncrement,
-        columnIncrement,
-        firstRowCondition,
-        secondRowCondition,
-        firstColumnCondition,
-        secondColumnCondition,
-        player
-):
-    opponent = (player + 1) % 2
-
-    score = 0
-    currentInLine = 0
-    valsInARow = 0
-    valsInARowPrev = 0
-
-    # Iterate in one side of the line until a move from another
-    # player or an empty space is found
-    row = i + rowIncrement
-    column = j + columnIncrement
-    firstLoop = True
-    while (
-        row != firstRowCondition and
-        column != firstColumnCondition and
-        gameState[row][column] != 0
-    ):
-        if firstLoop:
-            currentInLine = gameState[row][column]
-            firstLoop = False
-        if currentInLine == gameState[row][column]:
-            valsInARow += 1
-        else:
-            break
-        row += rowIncrement
-        column += columnIncrement
-
-    # Iterate on second side of the line
-    row = i - rowIncrement
-    column = j - columnIncrement
-    firstLoop = True
-    while (
-        row != secondRowCondition and
-        column != secondColumnCondition and
-        gameState[row][column] != 0
-    ):
-        if firstLoop:
-            firstLoop = False
-
-            # Verify if previous side of line guaranteed a win on the
-            # coordinate, and if not, continue counting to see if the
-            # given coordinate can complete a line from in between.
-            if currentInLine != gameState[row][column]:
-                if valsInARow == 3 and currentInLine == player:
-                    score += 1
-                elif valsInARow == 3 and currentInLine == opponent:
-                    score -= 1
-            else:
-                valsInARowPrev = valsInARow
-
-            valsInARow = 0
-            currentInLine = gameState[row][column]
-
-        if currentInLine == gameState[row][column]:
-            valsInARow += 1
-        else:
-            break
-        row -= rowIncrement
-        column -= columnIncrement
-
-    if valsInARow + valsInARowPrev >= 3 and currentInLine == player:
-        score += 1
-    elif valsInARow + valsInARowPrev >= 3 and currentInLine == opponent:
-        score -= 1
-
-    return score
-"""
-
-
 # Method that executes the first call of the minimax method and
 # returns the move to be executed by the computer. It also verifies
 # if any immediate wins or loses are present.
 #
 def bestMove(state, debug=False):
-    #move, score = minimax(state, SEARCH_DEPTH)
     move, _, _ = alphabeta(_swap_state(state), SEARCH_DEPTH, float('inf'), debug, '')
     return move
 
@@ -448,7 +294,6 @@ def playGame():
 # Main execution of the game. Plays the game until the user
 # wishes to stop.
 #
-
 
 if __name__ == "__main__":
     playing = True

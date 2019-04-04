@@ -2,11 +2,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-import numpy
 
-class DQN_FCN(nn.Module):
+class DQN_CNN(nn.Module):
     def __init__(self):
-        super(DQN_FCN, self).__init__()
+        super(DQN_CNN, self).__init__()
         self.conv1 = nn.Conv2d(2, 32, 3, stride=1)  # 7x6 -> 5x4
         self.conv2 = nn.Conv2d(32, 128, 3, stride=1)  # 5x4 -> 3x2
         self.linear4 = nn.Linear(128*3*2, 2048)
@@ -14,26 +13,18 @@ class DQN_FCN(nn.Module):
         self.linear6 = nn.Linear(512, 7)
 
     def forward(self, X):
-        #print(X.shape)
         o1 = F.relu(self.conv1(X))
-        #print(o1.shape)
         o2 = F.relu(self.conv2(o1))
-        #print(o2.shape)
-        #   o3 = F.relu(self.conv3(o2))
-        #   print(o3.shape)
         o4 = o2.view(-1, 128*3*2)
-        #print(o4.shape)
         o5 = F.relu(self.linear4(o4))
         o6 = F.relu(self.linear5(o5))
-        #print(o5.shape)
         o7 = self.linear6(o6)
-        #print(o6.shape)
         return o7
 
 
-class DQN_FCN_WIDE(nn.Module):
+class DQN_CNN_WIDE(nn.Module):
     def __init__(self):
-        super(DQN_FCN_WIDE, self).__init__()
+        super(DQN_CNN_WIDE, self).__init__()
         self.conv1 = nn.Conv2d(2, 64, 3, stride=1)  # 7x6 -> 5x4
         self.conv2 = nn.Conv2d(64, 256, 3, stride=1)  # 5x4 -> 3x2
         self.linear4 = nn.Linear(256*3*2, 2048)
@@ -41,21 +32,61 @@ class DQN_FCN_WIDE(nn.Module):
         self.linear6 = nn.Linear(512, 7)
 
     def forward(self, X):
-        #print(X.shape)
         o1 = F.relu(self.conv1(X))
-        #print(o1.shape)
         o2 = F.relu(self.conv2(o1))
-        #print(o2.shape)
-        #   o3 = F.relu(self.conv3(o2))
-        #   print(o3.shape)
         o4 = o2.view(-1, 256*3*2)
-        #print(o4.shape)
         o5 = F.relu(self.linear4(o4))
         o6 = F.relu(self.linear5(o5))
-        #print(o5.shape)
         o7 = self.linear6(o6)
-        #print(o6.shape)
         return o7
+
+
+class DQN_CNN_WIDE_PREDICTION(nn.Module):
+    def __init__(self):
+        super(DQN_CNN_WIDE_PREDICTION, self).__init__()
+        self.conv1 = nn.Conv2d(2, 64, 3, stride=1)  # 7x6 -> 5x4
+        self.conv2 = nn.Conv2d(64, 256, 3, stride=1)  # 5x4 -> 3x2
+        self.linear4 = nn.Linear(256*3*2, 2048)
+        self.linear5 = nn.Linear(2048, 512)
+        self.linear6 = nn.Linear(512, 7)
+        self.linear_done = nn.Linear(512, 7)
+        self.linear_reward = nn.Linear(512, 7)
+
+    def forward(self, X, prediction=False):
+        o1 = F.relu(self.conv1(X))
+        o2 = F.relu(self.conv2(o1))
+        o4 = o2.view(-1, 256*3*2)
+        o5 = F.relu(self.linear4(o4))
+        o6 = F.relu(self.linear5(o5))
+        o7 = self.linear6(o6)
+
+        if prediction:
+            done = F.sigmoid(self.linear_done(o6))
+            reward = self.linear_reward(o6)
+            return o7, done, reward
+
+        return o7
+
+
+class DQN_CNN_VERY_WIDE(nn.Module):
+    def __init__(self):
+        super(DQN_CNN_VERY_WIDE, self).__init__()
+        self.conv1 = nn.Conv2d(2, 128, 3, stride=1)  # 7x6 -> 5x4
+        self.conv2 = nn.Conv2d(128, 512, 3, stride=1)  # 5x4 -> 3x2
+        self.linear4 = nn.Linear(512*3*2, 2048)
+        self.linear5 = nn.Linear(2048, 2048)
+        self.linear6 = nn.Linear(2048, 512)
+        self.linear7 = nn.Linear(512, 7)
+
+    def forward(self, X):
+        o1 = F.relu(self.conv1(X))
+        o2 = F.relu(self.conv2(o1))
+        o4 = o2.view(-1, 512*3*2)
+        o5 = F.relu(self.linear4(o4))
+        o6 = F.relu(self.linear5(o5))
+        o7 = F.relu(self.linear6(o6))
+        o8 = self.linear7(o7)
+        return o8
 
 
 class DQN_LINEAR(nn.Module):
@@ -89,20 +120,33 @@ class DQN_SKIP(nn.Module):
         self.linear5 = nn.Linear(512, 7)
 
     def forward(self, X):
-        #print(X.shape)
         o1 = F.relu(self.conv1(X))
-        #print(o1.shape)
         o2 = F.relu(self.conv2(o1))
-        #print(o2.shape)
-        #   o3 = F.relu(self.conv3(o2))
-        #   print(o3.shape)
-        o2_l = o2.view(-1, 128*3*2)
-        X_l = X.view(-1, 7*6*2)
-        X_o2_concat = torch.cat((o2_l, X_l), dim=1)
-        #print(o4.shape)
+        o2_flat = o2.view(-1, 128*3*2)
+        X_flat = X.view(-1, 7*6*2)
+        X_o2_concat = torch.cat((o2_flat, X_flat), dim=1)
         o3 = F.relu(self.linear3(X_o2_concat))
         o4 = F.relu(self.linear4(o3))
-        #print(o5.shape)
         o5 = self.linear5(o4)
-        #print(o6.shape)
+        return o5
+
+
+class DQN_SKIP_WIDE(nn.Module):
+    def __init__(self):
+        super(DQN_SKIP_WIDE, self).__init__()
+        self.conv1 = nn.Conv2d(2, 64, 3, stride=1)  # 7x6 -> 5x4
+        self.conv2 = nn.Conv2d(64, 256, 3, stride=1)  # 5x4 -> 3x2
+        self.linear3 = nn.Linear(256*3*2 + 7*6*2, 2048)
+        self.linear4 = nn.Linear(2048, 512)
+        self.linear5 = nn.Linear(512, 7)
+
+    def forward(self, X):
+        o1 = F.relu(self.conv1(X))
+        o2 = F.relu(self.conv2(o1))
+        o2_flat = o2.view(-1, 256*3*2)
+        X_flat = X.view(-1, 7*6*2)
+        X_o2_concat = torch.cat((o2_flat, X_flat), dim=1)
+        o3 = F.relu(self.linear3(X_o2_concat))
+        o4 = F.relu(self.linear4(o3))
+        o5 = self.linear5(o4)
         return o5

@@ -1,15 +1,11 @@
-import random
+import random, time
 
 import numpy as np
 import matplotlib.pyplot as plt
 
 import torch
 
-from utils_game import Game
 from utils_plot import plot_state
-from utils_save import load_model
-
-from model import DQN_FCN_WIDE
 
 USE_CUDA = False
 dtype = torch.cuda.FloatTensor if USE_CUDA else torch.FloatTensor
@@ -23,6 +19,7 @@ def play_game(env, Q):
     flag = 1
     stats = np.zeros([2, 7])
     stats_symm = np.zeros([2, 7])
+    action=None
     while flag:
         obs, _ = env.reset(random.randint(0, 1))
         done = False
@@ -44,7 +41,7 @@ def play_game(env, Q):
             opponent_input_to_dqn = np.flip(opponent_obs.transpose(2, 0, 1), axis=2).copy()
             opponent_input_to_dqn = torch.from_numpy(opponent_input_to_dqn).type(dtype).unsqueeze(0)
             stats_symm[1, :] = np.flip(Q(opponent_input_to_dqn).data.cpu().numpy(), axis=1)
-            plot_state(env.state, 'Game Turn {}'.format(env.turn), stats=stats, stats_symm=stats_symm)
+            plot_state(env.state, 'Game Turn {}'.format(env.turn), action=action, stats=stats, stats_symm=stats_symm)
             plt.show()
             plt.pause(0.01)
 
@@ -63,8 +60,12 @@ def play_game(env, Q):
                 # Get opponent action
                 opponent_obs = env.swap_state(player=1)[:, :, :2]
                 opponent_input_to_dqn = torch.from_numpy(opponent_obs.transpose(2, 0, 1)).type(dtype).unsqueeze(0)
+
+                tic = time.perf_counter()
                 with torch.no_grad():
                     action = Q(opponent_input_to_dqn).data.max(dim=1)[1].cpu().numpy()
+                print('time: {}'.format(time.perf_counter() - tic))
+
                 obs, reward, done, _ = env.step(action)
                 if done:
                     if reward > 0:
@@ -74,7 +75,8 @@ def play_game(env, Q):
                     else:
                         draw = True
 
-        plot_state(env.state, 'Game Turn {}'.format(env.turn), stats=stats)
+        plt.subplot(2, 1, 1)
+        plot_state(env.state, 'Game Turn {}'.format(env.turn), action=action)
         plt.show()
         plt.pause(0.01)
         print(action)
@@ -89,10 +91,20 @@ def play_game(env, Q):
 
 
 if __name__ == "__main__":
+    from model import DQN_CNN_WIDE_PREDICTION
+    from utils_save import load_model
+    from utils_game import Game
+
     env = Game()
 
-    Q = DQN_FCN_WIDE()
-    checkpoint_path = './checkpoints_5_01/model_max_wins_5.pth.tar'
+    Q = DQN_CNN_WIDE_PREDICTION()
+    model_path = './best_model/'
+    model = 'best_model'
+    checkpoint_path = model_path + model + '.pth.tar'
     params = load_model(Q, checkpoint_path)
+    print(params)
 
-    play_game(env, Q)
+    def policy(obs):
+        return Q(obs)
+
+    play_game(env, policy)
