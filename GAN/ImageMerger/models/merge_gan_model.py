@@ -54,13 +54,13 @@ class mergeganmodel(BaseModel):
             parser.add_argument('--background', action='store_false', help='use background')
             parser.add_argument('--attention', action='store_true', help='use attention layer')
 
-            parser.add_argument('--lambda_G1', type=float, default=1.0,
+            parser.add_argument('--lambda_G1', type=float, default=0.1,
                                 help='weight for cycle loss (A -> B -> A)')
-            parser.add_argument('--lambda_G2', type=float, default=1.0,
+            parser.add_argument('--lambda_G2', type=float, default=0.1,
                                 help='weight for cycle loss (B -> A -> B)')
-            parser.add_argument('--lambda_Background', type=float, default=0.5,
+            parser.add_argument('--lambda_Background', type=float, default=1.0,
                                 help='use background mapping. Setting lambda_identity other than 0 has an effect of scaling the weight of the identity mapping loss. For example, if the weight of the identity loss should be 10 times smaller than the weight of the reconstruction loss, please set lambda_identity = 0.1')
-            parser.add_argument('--lambda_Identity', type=float, default=1.0,
+            parser.add_argument('--lambda_Identity', type=float, default=0.05,
                                 help='use identity mapping. Setting lambda_identity other than 0 has an effect of scaling the weight of the identity mapping loss. For example, if the weight of the identity loss should be 10 times smaller than the weight of the reconstruction loss, please set lambda_identity = 0.1')
 
             parser.add_argument('--preprocess_mask', action='store_false',
@@ -343,7 +343,7 @@ class mergeganmodel(BaseModel):
         # ReID loss ReID(anchor, G(A,B))
         real_a_embed = self.netReID(self.real_a)
         fake_p_embed = self.netReID(self.fake_G[:,self.A])
-        self.loss_GReID = torch.mean(self.criterionReID2(real_a_embed, fake_p_embed)) * 0.1
+        self.loss_GReID = torch.mean(self.criterionReID2(real_a_embed, fake_p_embed)) * 0.01
 
         # GAN Background loss
         if self.opt.background:
