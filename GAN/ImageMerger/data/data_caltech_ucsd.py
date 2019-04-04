@@ -13,7 +13,7 @@ from data.data_utils import ArrayDataset
 from util.caltech_images import fit_square
 
 
-def load_caltech_data(path, imsize=128, type='pickle', mode='cropped', min_count=5, size=None):
+def load_caltech_data(path, imsize=128, type='pickle', mode='cropped', min_count=5, size=None, testset=None):
     assert type == 'pickle' or mode == 'original', 'caltech ucsd dataset in type mat cannot be cropped'
     caltech_images_path = os.path.join(path, 'images')
     caltech_annotations_path = os.path.join(path, 'annotations-' + type)
@@ -31,6 +31,10 @@ def load_caltech_data(path, imsize=128, type='pickle', mode='cropped', min_count
         masks = np.zeros((N, 1, imsize, imsize))
         labels = np.zeros((N,))
 
+    if testset is not None:
+        test_images = np.zeros((len(testset), 3, imsize, imsize))
+        test_masks = np.zeros((len(testset), 1, imsize, imsize))
+        test_labels = np.zeros((len(testset), ))
     n = 0
     for species in os.listdir(caltech_annotations_path):
         count = len(os.listdir(os.path.join(caltech_annotations_path, species)))
@@ -40,6 +44,11 @@ def load_caltech_data(path, imsize=128, type='pickle', mode='cropped', min_count
         species_images_path = os.path.join(caltech_images_path, species)
         species_annotations_path = os.path.join(caltech_annotations_path, species)
         for image in os.listdir(species_annotations_path):
+            if n >= N:
+                if n == N:
+                    print('quitting with reduced dataset')
+                    n += 1
+                continue
             image_name = image.split('.')[0]
             image_path = os.path.join(species_images_path, image_name + '.jpg')
             annotation_path = os.path.join(species_annotations_path, image_name + '.' + type)
@@ -86,26 +95,48 @@ def load_caltech_data(path, imsize=128, type='pickle', mode='cropped', min_count
                 # plt.imshow(masks[n, 0, :, :])
 
             labels[n] = int(species.split('.')[0])
+
+            if testset is not None:
+                if image_name in testset:
+                    idx = testset.index(image_name)
+                    test_images[idx] = images[n]
+                    test_masks[idx] = masks[n]
+                    test_labels[idx] = labels[n]
+                    print('Added test image {}: {}'.format(idx, image_name))
             n += 1
-            if n == N:
-                print('quitting with reduced dataset')
-                return images, masks, labels
 
     print('done')
-    return images, masks, labels
+    testset = {'images': test_images, 'masks': test_masks, 'labels': test_labels} if testset is not None else None
+    return images, masks, labels, testset
 
 
-def create_dataset_caltech_ucsd(path, batch_size, imsize=128, type='pickle', mode='cropped', size=None):
-    images, masks, labels = load_caltech_data(path, imsize, type, mode, size=size)
+def create_dataset_caltech_ucsd(path, batch_size, imsize=128, type='pickle', mode='cropped', size=None, testset=None):
+    images, masks, labels, testset = load_caltech_data(path, imsize, type, mode, size=size, testset=testset)
 
     caltech_data = np.concatenate([images, masks], axis=1).astype(np.float32)
     dataset = ArrayDataset(caltech_data, labels=labels)
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
-    return dataloader, torch.from_numpy(caltech_data), torch.from_numpy(labels)
+    if testset is not None:
+        testset['images'] = torch.from_numpy(np.concatenate([testset['images'], testset['masks']], axis=1).astype(np.float32))
+        testset['labels'] = torch.from_numpy(testset['labels'])
+        testset.pop('masks')
+    return dataloader, torch.from_numpy(caltech_data), torch.from_numpy(labels), testset
 
 
 if __name__ == '__main__':
-    images, mask, labels = load_caltech_data('C:/Datasets/Caltech-UCSD-Birds-200')
+    test = ['Red_winged_Blackbird_0017_583846699', 'Yellow_headed_Blackbird_0009_483173184',
+     'Lazuli_Bunting_0010_522399154', 'Painted_Bunting_0006_2862481106',
+     'Gray_Catbird_0031_148467783', 'Purple_Finch_0006_2329434675', 'American_Goldfinch_0004_155617438',
+     'Blue_Grosbeak_0008_2450854752', 'Green_Kingfisher_0002_228927324', 'Pied_Kingfisher_0002_1020026028']
+    images, mask, labels, testset = load_caltech_data('C:/Datasets/Caltech-UCSD-Birds-200', testset=test)
+
+    import matplotlib.pyplot as plt
+    plt.figure()
+    for i in range(testset['images'].shape[0]):
+        plt.subplot(2,6,i+1)
+        plt.imshow(testset['images'][i].transpose(1,2,0))
+        plt.title(testset['labels'][i])
+
 
 

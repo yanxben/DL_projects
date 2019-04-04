@@ -46,12 +46,15 @@ def im2tensor(i):
     return (i - 0.5) * 2
 
 
-testset = list(range(10)) # [0, 4, 5, 6, 206, 210, 213, 405, 407, 435]
+testset = ['Red_winged_Blackbird_0017_583846699', 'Yellow_headed_Blackbird_0009_483173184',
+     'Lazuli_Bunting_0010_522399154', 'Painted_Bunting_0006_2862481106',
+     'Gray_Catbird_0031_148467783', 'Purple_Finch_0006_2329434675', 'American_Goldfinch_0004_155617438',
+     'Blue_Grosbeak_0008_2450854752', 'Green_Kingfisher_0002_228927324', 'Pied_Kingfisher_0002_1020026028']
 testlen = len(testset)
 batch_size = 64
 imsize = 128
 depth = 6
-
+plot = True
 #mode = 'classification'
 #mode = 're-identification'
 mode = 'autoencoder'
@@ -61,7 +64,7 @@ mode = 'autoencoder'
 if __name__ == '__main__':
     t0 = time.time()
     #opt = TrainOptions().parse()   # get training options
-    _, caltech_data, caltech_labels = create_dataset_caltech_ucsd('C:/Datasets/Caltech-UCSD-Birds-200', batch_size, imsize=imsize, size=256)  # create a dataset given opt.dataset_mode and other options
+    _, caltech_data, caltech_labels, testset = create_dataset_caltech_ucsd('C:/Datasets/Caltech-UCSD-Birds-200', batch_size, imsize=imsize, size=256, testset=testset)  # create a dataset given opt.dataset_mode and other options
     #dataset_size = len(dataset)    # get the number of images in the dataset.
     #print('The number of training epochs = %d' % dataset_size)
     print('The number of training images = %d' % caltech_data.shape[0])

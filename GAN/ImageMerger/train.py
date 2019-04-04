@@ -41,7 +41,11 @@ def im2tensor(i):
     return (i - 0.5) * 2
 
 
-testset = list(range(10)) # [0, 4, 5, 6, 206, 210, 213, 405, 407, 435]
+testset = ['Red_winged_Blackbird_0017_583846699', 'Yellow_headed_Blackbird_0009_483173184',
+           'Lazuli_Bunting_0010_522399154', 'Painted_Bunting_0006_2862481106',
+           'Gray_Catbird_0031_148467783', 'Purple_Finch_0006_2329434675',
+           'American_Goldfinch_0004_155617438', 'Blue_Grosbeak_0008_2450854752',
+           'Green_Kingfisher_0002_228927324', 'Pied_Kingfisher_0002_1020026028']
 testlen = len(testset)
 if __name__ == '__main__':
     t0 = time.time()
@@ -51,24 +55,20 @@ if __name__ == '__main__':
         caltech_path = 'C:/Datasets/Caltech-UCSD-Birds-200'
     elif socket.gethostname() == 'ubuntu-1':
         caltech_path = '/home/yanivbenny/Datasets/Caltech-UCSD-Birds-200'
-    _, caltech_data, caltech_labels = create_dataset_caltech_ucsd(caltech_path, opt.batch_size, imsize=opt.input_size)  # create a dataset given opt.dataset_mode and other options
+    _, caltech_data, caltech_labels, testset = create_dataset_caltech_ucsd(caltech_path, opt.batch_size, imsize=opt.input_size, testset=testset)  # create a dataset given opt.dataset_mode and other options
 
     #dataset_size = caltech_data.shape[0]  #len(dataset)    # get the number of images in the dataset.
     dataset_size, C, H, W = caltech_data.shape
     print('The number of training epochs = %d' % (dataset_size // opt.batch_size))
     print('The number of training images = %d' % dataset_size)
 
-    #stl10_data_test = stl10_data[testset]
-    testlen = 10
-    testset = torch.randperm(dataset_size)[:testlen]  # [0, 4, 5, 6, 206, 210, 213, 405, 407, 435]
-    data_test = caltech_data[testset]
-    #Nt, Ct, Ht, Wt = data_test.shape
-    model_test_input = {'real_G': data_test[:, :C-1, :, :].reshape([-1, 2, C-1, H, W]),
-                        'mask_G': data_test[:, C-1, :, :].unsqueeze(1).unsqueeze(1).reshape([-1, 2, 1, H, W]),
-                        'real_D': data_test[:, :C-1, :, :],
-                        'mask_D': data_test[:, C-1, :, :].unsqueeze(1),
-                        'real_a': data_test[:testlen//2, :C-1, :, :],
-                        'real_n': data_test[:testlen//2, :C-1, :, :]}
+    model_test_input = {'real_G': testset['images'][:, :C-1, :, :].reshape([-1, 2, C-1, H, W]),
+                        'mask_G': testset['images'][:, C-1, :, :].unsqueeze(1).unsqueeze(1).reshape([-1, 2, 1, H, W]),
+                        'real_D': testset['images'][:, :C-1, :, :],
+                        'mask_D': testset['images'][:, C-1, :, :].unsqueeze(1),
+                        'real_a': testset['images'][:testlen//2, :C-1, :, :],  # Unused
+                        'real_n': testset['images'][:testlen//2, :C-1, :, :]  # Unused
+                        }
 
     #caltech_data = caltech_data.cuda()
     plt.figure('test merge', figsize=(1920 / 100, 1080 / 100), dpi=100)
