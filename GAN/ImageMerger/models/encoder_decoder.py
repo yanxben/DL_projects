@@ -1,8 +1,37 @@
 import torch
 import torch.nn as nn
 
+
+class EncoderBlock(nn.Module):
+    def __init__(self, filters_in, filters_out, kernel=4, stride=2, padding=1, activation='lrelu', dropout=0.):
+        super(EncoderBlock, self).__init__()
+        self.full = nn.Sequential(
+            nn.Conv2d(filters_in, filters_out, kernel, stride, padding),
+            nn.InstanceNorm2d(filters_out),
+            nn.LeakyReLU(0.2, inplace=True) if activation=='lrelu' else nn.ReLU(inplace=True),
+            nn.Dropout2d(p=dropout)
+        )
+
+    def forward(self, x):
+        return self.full(x)
+
+
+class DecoderBlock(nn.Module):
+    def __init__(self, filters_in, filters_out, kernel=4, stride=2, padding=1, activation='relu', dropout=0.):
+        super(DecoderBlock, self).__init__()
+        self.full = nn.Sequential(
+            nn.Dropout2d(p=dropout),
+            nn.ConvTranspose2d(filters_in, filters_out, kernel, stride, padding),
+            nn.InstanceNorm2d(filters_out),
+            nn.LeakyReLU(0.2, inplace=True) if activation == 'lrelu' else nn.ReLU(inplace=True)
+        )
+
+    def forward(self, x):
+        return self.full(x)
+
+
 class E1(nn.Module):
-    def __init__(self, input_nc, last_conv_nc, sep, input_size, depth):
+    def __init__(self, input_nc, last_conv_nc, sep, input_size, depth, activation='lrelu', dropout=0.):
         super(E1, self).__init__()
         assert input_size // (2 ** depth) == input_size / (2 ** depth), 'Bad depth for input size'
         self.input_nc = input_nc
@@ -10,159 +39,88 @@ class E1(nn.Module):
         self.sep = sep
         self.input_size = input_size
         self.feature_size = input_size // (2 ** depth)
+        self.depth = depth
 
-        if depth == 5:
-            self.full = nn.Sequential(
-                nn.Conv2d(self.input_nc, 32, 4, 2, 1),
-                nn.InstanceNorm2d(32),
-                nn.LeakyReLU(0.2, inplace=True),
-                nn.Conv2d(32, 64, 4, 2, 1),
-                nn.InstanceNorm2d(64),
-                nn.LeakyReLU(0.2, inplace=True),
-                nn.Conv2d(64, 128, 4, 2, 1),
-                nn.InstanceNorm2d(128),
-                nn.LeakyReLU(0.2, inplace=True),
-                nn.Conv2d(128, 256, 4, 2, 1),
-                nn.InstanceNorm2d(256),
-                nn.LeakyReLU(0.2, inplace=True),
-                nn.Conv2d(256, (last_conv_nc - self.sep), 4, 2, 1),
-                nn.InstanceNorm2d(last_conv_nc - self.sep),
-                nn.LeakyReLU(0.2, inplace=True)
-            )
-        if depth == 6:
-            self.full = nn.Sequential(
-                nn.Conv2d(self.input_nc, 32, 4, 2, 1),
-                nn.InstanceNorm2d(32),
-                nn.LeakyReLU(0.2, inplace=True),
-                nn.Conv2d(32, 64, 4, 2, 1),
-                nn.InstanceNorm2d(64),
-                nn.LeakyReLU(0.2, inplace=True),
-                nn.Conv2d(64, 128, 4, 2, 1),
-                nn.InstanceNorm2d(128),
-                nn.LeakyReLU(0.2, inplace=True),
-                nn.Conv2d(128, 256, 4, 2, 1),
-                nn.InstanceNorm2d(256),
-                nn.LeakyReLU(0.2, inplace=True),
-                nn.Conv2d(256, 512, 4, 2, 1),
-                nn.InstanceNorm2d(512),
-                nn.LeakyReLU(0.2, inplace=True),
-                nn.Conv2d(512, (last_conv_nc - self.sep), 4, 2, 1),
-                nn.InstanceNorm2d(last_conv_nc - self.sep),
-                nn.LeakyReLU(0.2, inplace=True)
-            )
+        self.blocks = nn.ModuleDict()
+        self.blocks[str(0)] = EncoderBlock(self.input_nc, 32, activation=activation, dropout=dropout)
+        for d in range(1, depth-1):
+            self.blocks[str(d)] = EncoderBlock(32*(2 ** min(4,d-1)), 32*(2 ** min(4,d)), activation=activation, dropout=dropout)
+        self.blocks[str(depth-1)] = EncoderBlock(32 * (2 ** min(4,depth - 1)), last_conv_nc - sep, activation=activation, dropout=dropout)
 
-    def forward(self, x):
-        x = self.full(x)
-        x = x.view(-1, (self.last_conv_nc - self.sep) * self.feature_size * self.feature_size)
-        return x
+    def forward(self, x, extract=None):
+        x = [x]
+        for d in range(self.depth):
+            x.append(self.blocks[str(d)](x[-1]))
+            #print(x[-1].shape)
+
+        x[self.depth] = x[self.depth].view(-1, (self.last_conv_nc - self.sep) * self.feature_size * self.feature_size)
+        if extract is None:
+            return x[self.depth]
+        return [x[d] if d in extract else None for d in range(self.depth + 1)]
 
 
 class E2(nn.Module):
-    def __init__(self, input_nc, sep, input_size, depth):
+    def __init__(self, input_nc, sep, input_size, depth, activation='lrelu', dropout=0.):
         super(E2, self).__init__()
         assert input_size // (2 ** depth) == input_size / (2 ** depth), 'Bad depth for input size'
         self.input_nc = input_nc
         self.sep = sep
         self.input_size = input_size
         self.feature_size = input_size // (2 ** depth)
+        self.depth = depth
 
-        if depth == 5:
-            self.full = nn.Sequential(
-                nn.Conv2d(self.input_nc, 32, 4, 2, 1),
-                nn.InstanceNorm2d(32),
-                nn.LeakyReLU(0.2, inplace=True),
-                nn.Conv2d(32, 64, 4, 2, 1),
-                nn.InstanceNorm2d(64),
-                nn.LeakyReLU(0.2, inplace=True),
-                nn.Conv2d(64, 128, 4, 2, 1),
-                nn.InstanceNorm2d(128),
-                nn.LeakyReLU(0.2, inplace=True),
-                nn.Conv2d(128, 128, 4, 2, 1),
-                nn.InstanceNorm2d(128),
-                nn.LeakyReLU(0.2, inplace=True),
-                nn.Conv2d(128, self.sep, 4, 2, 1),
-                nn.InstanceNorm2d(self.sep),
-                nn.LeakyReLU(0.2),
-            )
-        if depth == 6:
-            self.full = nn.Sequential(
-                nn.Conv2d(self.input_nc, 32, 4, 2, 1),
-                nn.InstanceNorm2d(32),
-                nn.LeakyReLU(0.2, inplace=True),
-                nn.Conv2d(32, 64, 4, 2, 1),
-                nn.InstanceNorm2d(64),
-                nn.LeakyReLU(0.2, inplace=True),
-                nn.Conv2d(64, 128, 4, 2, 1),
-                nn.InstanceNorm2d(128),
-                nn.LeakyReLU(0.2, inplace=True),
-                nn.Conv2d(128, 128, 4, 2, 1),
-                nn.InstanceNorm2d(128),
-                nn.LeakyReLU(0.2, inplace=True),
-                nn.Conv2d(128, 128, 4, 2, 1),
-                nn.InstanceNorm2d(128),
-                nn.LeakyReLU(0.2, inplace=True),
-                nn.Conv2d(128, self.sep, 4, 2, 1),
-                nn.InstanceNorm2d(self.sep),
-                nn.LeakyReLU(0.2),
-            )
+        self.blocks = nn.ModuleDict()
+        self.blocks[str(0)] = EncoderBlock(self.input_nc, 32, activation=activation, dropout=dropout)
+        for d in range(1, depth-1):
+            self.blocks[str(d)] = EncoderBlock(32 * (2 ** min(3,d - 1)), 32 * (2 ** min(3,d)), activation=activation, dropout=dropout)
+        self.blocks[str(depth-1)] = EncoderBlock(32 * (2 ** min(3,depth - 2)), sep, activation=activation, dropout=dropout)
 
-    def forward(self, x):
-        x = self.full(x)
-        x = x.view(-1, self.sep * self.feature_size * self.feature_size)
-        return x
+    def forward(self, x, extract=None):
+        x = [x]
+        for d in range(self.depth):
+            x.append(self.blocks[str(d)](x[-1]))
+            #print(x[-1].shape)
+
+        x[self.depth] = x[self.depth].view(-1, self.sep * self.feature_size * self.feature_size)
+        if extract is None:
+            return x[self.depth]
+        return [x[d] if d in extract else None for d in range(self.depth+1)]
 
 
 class Decoder(nn.Module):
-    def __init__(self, output_nc, last_conv_nc, input_size, depth):
+    def __init__(self, output_nc, last_conv_nc, input_size, depth, activation='relu', dropout=0.):
         super(Decoder, self).__init__()
         assert input_size // (2 ** depth) == input_size / (2 ** depth), 'Bad depth for input size'
         self.output_nc = output_nc
         self.last_conv_nc = last_conv_nc
         self.input_size = input_size
         self.feature_size = input_size // (2 ** depth)
+        self.depth = depth
 
-        if depth == 5:
-            self.main = nn.Sequential(
-                nn.ConvTranspose2d(last_conv_nc, 256, 4, 2, 1),
-                nn.InstanceNorm2d(256),
-                nn.ReLU(inplace=True),
-                nn.ConvTranspose2d(256, 128, 4, 2, 1),
-                nn.InstanceNorm2d(128),
-                nn.ReLU(inplace=True),
-                nn.ConvTranspose2d(128, 64, 4, 2, 1),
-                nn.InstanceNorm2d(64),
-                nn.ReLU(inplace=True),
-                nn.ConvTranspose2d(64, 32, 4, 2, 1),
-                nn.InstanceNorm2d(32),
-                nn.ReLU(inplace=True),
-                nn.ConvTranspose2d(32, output_nc, 4, 2, 1),
-                nn.Tanh()
-            )
-        if depth == 6:
-            self.main = nn.Sequential(
-                nn.ConvTranspose2d(last_conv_nc, 512, 4, 2, 1),
-                nn.InstanceNorm2d(512),
-                nn.ReLU(inplace=True),
-                nn.ConvTranspose2d(512, 256, 4, 2, 1),
-                nn.InstanceNorm2d(256),
-                nn.ReLU(inplace=True),
-                nn.ConvTranspose2d(256, 128, 4, 2, 1),
-                nn.InstanceNorm2d(128),
-                nn.ReLU(inplace=True),
-                nn.ConvTranspose2d(128, 64, 4, 2, 1),
-                nn.InstanceNorm2d(64),
-                nn.ReLU(inplace=True),
-                nn.ConvTranspose2d(64, 32, 4, 2, 1),
-                nn.InstanceNorm2d(32),
-                nn.ReLU(inplace=True),
-                nn.ConvTranspose2d(32, output_nc, 4, 2, 1),
-                nn.Tanh()
-            )
+        self.blocks = nn.ModuleDict()
+        self.blocks[str(depth-1)] = DecoderBlock(last_conv_nc, 32 * (2 ** min(4,depth-2)), activation=activation, dropout=dropout)
+        for d in reversed(range(1, depth-1)):
+            self.blocks[str(d)] = DecoderBlock(32 * (2 ** min(4,d)), 32 * (2 ** min(4,d-1)), activation=activation, dropout=dropout)
+        self.blocks[str(0)] = DecoderBlock(32, output_nc, activation=activation, dropout=dropout)
+
+        self.skip = nn.ModuleDict()
+        self.skip[str(0)] = nn.Conv2d(2 * output_nc, output_nc, kernel_size=1)
+        for d in reversed(range(1, depth)):
+            self.skip[str(d)] = nn.Conv2d(2 * 32 * (2 ** min(4,d-1)), 32 * (2 ** min(4,d-1)), kernel_size=1)
+
+        self.tanh = nn.Tanh()
 
     def forward(self, x):
-        x = x.view(-1, self.last_conv_nc, self.feature_size, self.feature_size)
-        x = self.main(x)
-        return x
+        if type(x) is not list:
+            x = [None for _ in range(self.depth)] + [x]
+        y = x[self.depth].view(-1, self.last_conv_nc, self.feature_size, self.feature_size)
+
+        for d in reversed(range(0, self.depth)):
+            y = self.blocks[str(d)](y)
+            if x[d] is not None:
+                y = self.skip[str(d)](torch.cat((y, x[d]), dim=1))
+
+        return self.tanh(y)
 
 
 class Generator(nn.Module):
@@ -179,7 +137,7 @@ class Generator(nn.Module):
         self.E_B = E2(self.input_nc, sep, input_size, depth)
         self.Decoder = Decoder(output_nc, last_conv_nc, input_size, depth)
 
-    def forward(self, x, mask_in, mode=None):
+    def forward(self, x, mask_in, mode=None, extract=None):
         N, B, C, H, W = x.shape
         if mode is None:
             mask_in1 = mask_in[:, 0, :, :, :]
@@ -198,9 +156,17 @@ class Generator(nn.Module):
             x1_A = x1
             x1_A = torch.cat([x1_A, mask_in1[:, 0, :, :].unsqueeze(1)], dim=1)
             x2_B = torch.cat([x2, mask_in2[:, 0, :, :].unsqueeze(1)], dim=1)
-            e_x1_A = self.E_A(x1_A)
-            e_x2_B = self.E_B(x2_B)
-            z1 = torch.cat([e_x1_A, e_x2_B], dim=1)
+            #print(x1_A.shape)
+            #print(x2_B.shape)
+            e_x1_A = self.E_A(x1_A, extract=extract)
+            e_x2_B = self.E_B(x2_B, extract=None)
+            #print(e_x1_A.shape)
+            #print(e_x2_B.shape)
+            if extract is None:
+                z1 = torch.cat([e_x1_A, e_x2_B], dim=1)
+            else:
+                z1 = e_x1_A
+                z1[-1] = torch.cat([e_x1_A[-1], e_x2_B], dim=1)
             y1 = self.Decoder(z1)
         if mode is None or mode == 1:
             # if self.preprocess:
@@ -209,9 +175,13 @@ class Generator(nn.Module):
             x2_A = x2
             x2_A = torch.cat([x2_A, mask_in2[:, 0, :, :].unsqueeze(1)], dim=1)
             x1_B = torch.cat([x1, mask_in1[:, 0, :, :].unsqueeze(1)], dim=1)
-            e_x2_A = self.E_A(x2_A)
-            e_x1_B = self.E_B(x1_B)
-            z2 = torch.cat([e_x2_A, e_x1_B], dim=1)
+            e_x2_A = self.E_A(x2_A, extract=extract)
+            e_x1_B = self.E_B(x1_B, extract=None)
+            if extract is None:
+                z2 = torch.cat([e_x2_A, e_x1_B], dim=1)
+            else:
+                z2 = e_x2_A
+                z2[-1] = torch.cat([e_x2_A[-1], e_x1_B], dim=1)
             y2 = self.Decoder(z2)
 
         if mode is None:
@@ -268,7 +238,7 @@ class Discriminator(nn.Module):
 
 
 class DiscriminatorReID(nn.Module):
-    def __init__(self, input_nc, last_conv_nc, input_size, depth):
+    def __init__(self, input_nc, last_conv_nc, input_size, depth, dropout=0.1):
         super(DiscriminatorReID, self).__init__()
         assert input_size // (2 ** depth) == input_size / (2 ** depth), 'Bad depth for input size'
         self.input_nc = input_nc
@@ -276,16 +246,19 @@ class DiscriminatorReID(nn.Module):
         self.input_size = input_size
         self.feature_size = input_size // (2 ** depth)
 
-        self.E = E1(input_nc, last_conv_nc, 0, self.input_size, depth)
+        self.E = E1(input_nc, last_conv_nc, 0, self.input_size, depth, dropout=dropout)
+        self.dropout = nn.Dropout2d(p=dropout)
         self.linear1 = nn.Linear(last_conv_nc * self.feature_size * self.feature_size, 512)
         self.sigmoid = nn.Sigmoid()
 
     def forward(self, x, use_activation=False):
-        x = self.E(x)
-        x = self.linear1(x)
+        x1 = self.E(x)
+        x2 = self.dropout(x1)
+        x3 = self.linear1(x2)
         if use_activation:
-            x = self.sigmoid(x)
-        return x
+            x4 = self.sigmoid(x3)
+            return x4
+        return x3
 
 
 class DiscriminatorTriplet(nn.Module):

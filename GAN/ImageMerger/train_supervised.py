@@ -54,6 +54,7 @@ testlen = len(testset)
 batch_size = 64
 imsize = 128
 depth = 6
+extract = [2, 4, depth]
 plot = True
 #mode = 'classification'
 #mode = 're-identification'
@@ -62,6 +63,7 @@ mode = 'autoencoder'
 
 
 if __name__ == '__main__':
+    print(torch.cuda.current_device())
     t0 = time.time()
     #opt = TrainOptions().parse()   # get training options
     _, caltech_data, caltech_labels, testset = create_dataset_caltech_ucsd('C:/Datasets/Caltech-UCSD-Birds-200', batch_size, imsize=imsize, size=256, testset=testset)  # create a dataset given opt.dataset_mode and other options
@@ -69,9 +71,29 @@ if __name__ == '__main__':
     #print('The number of training epochs = %d' % dataset_size)
     print('The number of training images = %d' % caltech_data.shape[0])
 
+    validationset = torch.zeros(2 * len(set(caltech_labels.numpy())), dtype=torch.long)
+    trainset = torch.zeros(caltech_labels.shape[0] - validationset.shape[0], dtype=torch.long)
+    validationsize = 0
+    trainsize = 0
+    label_dict = dict()
+    for label in set(caltech_labels.numpy()):
+        indices_p = ((caltech_labels == label).nonzero()[:, 0]).type(torch.long)
+        label_dict[label] = {1: indices_p[:-2]}
+        validationset[validationsize:validationsize+2] = indices_p[-2:]
+        trainset[trainsize:trainsize + indices_p.numel() - 2] = indices_p[:-2]
+        trainsize += indices_p.numel() - 2
+        validationsize += 2
+    for label in set(caltech_labels.numpy()):
+        indices_n = list(trainset.numpy())
+        for idx in list(label_dict[label][1].numpy()):
+            indices_n.remove(idx)
+        label_dict[label][0] = torch.tensor(indices_n, dtype=torch.long)
+    assert validationset.shape[0] == validationsize, "Bad validation generation"
+
     if mode == 'autoencoder':
         plt.figure(mode, figsize=(1920 / 100, 1080 / 100), dpi=100)
-
+    if mode == 're-identification':
+        plt.figure(mode, figsize=(1920 / 100, 1080 / 100), dpi=100)
 
     # Declare model, optimizer, loss
     if mode == 'classification':
@@ -79,7 +101,7 @@ if __name__ == '__main__':
         criterion = nn.CrossEntropyLoss()
     if mode=='re-identification':
         caltech_data = caltech_data.type(torch.FloatTensor)
-        model = DiscriminatorReID(caltech_data.shape[2], 512, imsize, depth=depth)
+        model = DiscriminatorReID(caltech_data.shape[1] - 1, 512, imsize, depth=depth)
         criterion = nn.TripletMarginLoss()
     if mode=='autoencoder':
         model = Generator(caltech_data.shape[1], 3, 512, 256, imsize, depth=depth, preprocess=False)
@@ -96,27 +118,35 @@ if __name__ == '__main__':
         epoch_iter = 0                  # the number of training iterations in current epoch, reset to 0 every epoch
         num_iterations = 0
         running_loss = 0
-        for i, batch in enumerate(torch.randperm(caltech_data.shape[0]).split(batch_size)): # enumerate(dataset):  # inner loop within one epoch
-            if batch.shape[0] < batch_size:
+        for i, batch_idx in enumerate(torch.randperm(trainset.shape[0]).split(batch_size)): # enumerate(dataset):  # inner loop within one epoch
+            if batch_idx.shape[0] < batch_size:
                 continue  # ignore tail of data if tail is smaller than batch_size
+            batch = trainset[batch_idx]
 
             if mode=='re-identification':
-                N, C, H, W = caltech_data.shape
+                _, C, H, W = caltech_data.shape
                 batch_p = torch.zeros_like(batch)
                 batch_n = torch.zeros_like(batch)
                 for k in range(batch_size):
-                    label_a = caltech_labels[batch[k]]
-                    indices = (caltech_labels == label_a).nonzero()
+                    label_a = int(caltech_labels[batch[k]])
+                    indices = label_dict[label_a][1]
                     batch_p[k] = indices[torch.randint(indices.numel(), (1,))]
-                    indices = (caltech_labels != label_a).nonzero()
+                    indices = label_dict[label_a][0]
                     batch_n[k] = indices[torch.randint(indices.numel(), (1,))]
 
-                #images = torch.cat([caltech_data[batch, :C - 1], caltech_data[batch_p, :C - 1], caltech_data[batch_n, :C - 1]], dim=1)
                 images_a, images_p, images_n = caltech_data[batch, :C-1], caltech_data[batch_p, :C-1], caltech_data[batch_n, :C-1]
-                images = im2tensor(images)
+
+                # Preprocess
+                flip = torch.randint(2, (batch_size, 1, 1, 1)).expand_as(images_a)
+                images_a = torch.where(flip == 1, images_a.flip(3), images_a)
+                flip = torch.randint(2, (batch_size, 1, 1, 1)).expand_as(images_p)
+                images_p = torch.where(flip == 1, images_p.flip(3), images_p)
+                flip = torch.randint(2, (batch_size, 1, 1, 1)).expand_as(images_a)
+                images_n = torch.where(flip == 1, images_n.flip(3), images_n)
+                images_a, images_p, images_n = im2tensor(images_a), im2tensor(images_p), im2tensor(images_n)
 
             if mode=='autoencoder':
-                N, C, H, W = caltech_data.shape
+                _, C, H, W = caltech_data.shape
                 labels = caltech_data[batch, :C-1, :, :]
                 mask = caltech_data[batch, C-1, :, :].unsqueeze(1).expand([batch_size, 2, H, W])
                 images = caltech_data[batch, :C-1, :, :].unsqueeze(1).expand([batch_size, 2, C-1, H, W])
@@ -130,8 +160,7 @@ if __name__ == '__main__':
                 embed_a, embed_p, embed_n = model(images_a.cuda()), model(images_p.cuda()), model(images_n.cuda())
                 loss = criterion(embed_a, embed_p, embed_n)
             if mode == 'autoencoder':
-                yhat = model(images.cuda(),
-                             mask_in=mask.cuda(), mode=0)
+                yhat = model(images.cuda(), mask_in=mask.cuda(), mode=0, extract=extract)
                 loss = criterion(yhat, labels.cuda())
 
             # Run backward
@@ -144,39 +173,70 @@ if __name__ == '__main__':
             num_iterations += 1
 
             # Keep last examples
-            last_data_images = tensor2im(images)
-            last_yhat = tensor2im(yhat.detach().cpu())
+            if mode == 'autoencoder':
+                last_data_images = tensor2im(images)
+                last_yhat = tensor2im(yhat.detach().cpu())
+            if mode == 're-identification':
+                last_data_images = tensor2im(torch.cat([images_a.unsqueeze(1), images_p.unsqueeze(1), images_n.unsqueeze(1)], dim=1).detach().cpu())
 
         # cache our model every <save_epoch_freq> epochs
-        if epoch % 1 == 0:
+        if epoch % 10 == 0:
             # print statistics
-            print('Epoch {:d}: loss {:.4f}'.format(epoch, running_loss / num_iterations))
+            with torch.no_grad():
+                if mode == 're-identification':
+                    _, C, H, W = caltech_data.shape
+                    batch_p = torch.zeros_like(validationset)
+                    batch_n = torch.zeros_like(validationset)
+                    for k in range(validationsize):
+                        label_a = int(caltech_labels[validationset[k]])
+                        # indices = (caltech_labels == label_a).nonzero()
+                        indices = label_dict[label_a][1]
+                        batch_p[k] = indices[torch.randint(indices.numel(), (1,))]
+                        # indices = (caltech_labels != label_a).nonzero()
+                        indices = label_dict[label_a][0]
+                        batch_n[k] = indices[torch.randint(indices.numel(), (1,))]
+
+                    images_a, images_p, images_n = caltech_data[validationset, :C - 1], caltech_data[batch_p, :C - 1], caltech_data[batch_n, :C - 1]
+                    images_a, images_p, images_n = im2tensor(images_a), im2tensor(images_p), im2tensor(images_n)
+
+                    embed_a, embed_p, embed_n = model(images_a.cuda()), model(images_p.cuda()), model(images_n.cuda())
+                    val_loss = criterion(embed_a, embed_p, embed_n)
+
+                if mode == 'autoencoder':
+                    _, C, H, W = caltech_data.shape
+                    labels = caltech_data[validationset, :C - 1, :, :]
+                    mask = caltech_data[validationset, C - 1, :, :].unsqueeze(1).expand([validationset.shape[0], 2, H, W])
+                    images = caltech_data[validationset, :C - 1, :, :].unsqueeze(1).expand([validationset.shape[0], 2, C - 1, H, W])
+                    images = im2tensor(images)
+
+                    yhat = model(images.cuda(), mask_in=mask.cuda(), mode=0)
+                    val_loss = criterion(yhat, labels.cuda())
+            print('Epoch {:d}: train loss {:.4f} --- val loss {:.4f}'.format(epoch, running_loss / num_iterations, val_loss))
+
+            if plot:
+                if mode=='autoencoder':
+                    for m in range(6):
+                        plt.subplot(2, 6, m + 1)
+                        plt.imshow(last_data_images[m,0].permute([1, 2, 0]))
+                        plt.subplot(2, 6, m + 7)
+                        plt.imshow(last_yhat[m].permute([1, 2, 0]))
+
+                if mode == 're-identification':
+                    for m in range(4):
+                        plt.subplot(3, 4, m + 1)
+                        plt.imshow(last_data_images[m, 0].permute([1, 2, 0]))
+                        plt.subplot(3, 4, m + 5)
+                        plt.imshow(last_data_images[m, 1].permute([1, 2, 0]))
+                        plt.subplot(3, 4, m + 9)
+                        plt.imshow(last_data_images[m, 2].permute([1, 2, 0]))
+                plt.suptitle('Epoch {:d}'.format(epoch))
+                plt.draw()
+                plt.pause(0.001)
+                plt.show(block=False)
 
             #print('saving the model at the end of epoch %d, iters %d' % (epoch, total_iters))
             #save_suffix = 'epoch_%d' % epoch
             #model.save_networks(save_suffix)
-            if plot:
-                if epoch % 1 == 0:
-                    if mode=='autoencoder':
-                        for m in range(6):
-                            plt.subplot(3, 6, m + 1)
-                            plt.imshow(last_data_images[m,0].permute([1, 2, 0]))
-                            plt.subplot(3, 6, m + 7)
-                            plt.imshow(last_yhat[m,0].permute([1, 2, 0]))
-                            plt.subplot(3, 6, m + 13)
-                            plt.imshow(last_yhat[m,1].permute([1, 2, 0]))
-                    if mode == 're-identification':
-                        for m in range(4):
-                            plt.subplot(3, 4, m + 1)
-                            plt.imshow(last_data_images[m, 0].permute([1, 2, 0]))
-                            plt.subplot(3, 4, m + 5)
-                            plt.imshow(last_data_images[m, 1].permute([1, 2, 0]))
-                            plt.subplot(3, 4, m + 9)
-                            plt.imshow(last_data_images[m, 2].permute([1, 2, 0]))
-                    plt.suptitle('Epoch {:d}',format(epoch))
-                    plt.draw()
-                    plt.pause(0.001)
-                    plt.show(block=False)
 
     print('DONE')
 
