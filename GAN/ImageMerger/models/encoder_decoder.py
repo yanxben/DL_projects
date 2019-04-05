@@ -140,22 +140,22 @@ class Generator(nn.Module):
     def forward(self, x, mask_in, mode=None, extract=None):
         N, B, C, H, W = x.shape
         if mode is None:
-            mask_in1 = mask_in[:, 0, :, :, :]
-            mask_in2 = mask_in[:, 1, :, :, :]
+            mask_in1 = mask_in[:, 0, 0, :, :].unsuqeeze(1)
+            mask_in2 = mask_in[:, 1, 0, :, :].unsuqeeze(1)
         else:
-            mask_in1 = mask_in
-            mask_in2 = mask_in
+            mask_in1 = mask_in[:, 0, :, :].unsuqeeze(1)
+            mask_in2 = mask_in[:, 0, :, :].unsuqeeze(1)
+
+        mask_in1 = torch.cat((mask_in1, 1 - mask_in1), dim=1)
+        mask_in2 = torch.cat((mask_in2, 1 - mask_in2), dim=1)
 
         x1 = x[:, 0, :, :, :]
         x2 = x[:, 1, :, :, :]
 
         if mode is None or mode == 0:
-            # if self.preprocess:
-            #     x1_A = (1-mask_in1) * x1 # + mask_in1 * torch.mean(x1, dim=1, keepdim=True)
-            # else:
             x1_A = x1
-            x1_A = torch.cat([x1_A, mask_in1[:, 0, :, :].unsqueeze(1)], dim=1)
-            x2_B = torch.cat([x2, mask_in2[:, 0, :, :].unsqueeze(1)], dim=1)
+            x1_A = torch.cat((x1_A, mask_in1), dim=1)
+            x2_B = torch.cat((x2, mask_in2), dim=1)
             #print(x1_A.shape)
             #print(x2_B.shape)
             e_x1_A = self.E_A(x1_A, extract=extract)
@@ -163,29 +163,26 @@ class Generator(nn.Module):
             #print(e_x1_A.shape)
             #print(e_x2_B.shape)
             if extract is None:
-                z1 = torch.cat([e_x1_A, e_x2_B], dim=1)
+                z1 = torch.cat((e_x1_A, e_x2_B), dim=1)
             else:
                 z1 = e_x1_A
-                z1[-1] = torch.cat([e_x1_A[-1], e_x2_B], dim=1)
+                z1[-1] = torch.cat((e_x1_A[-1], e_x2_B), dim=1)
             y1 = self.Decoder(z1)
         if mode is None or mode == 1:
-            # if self.preprocess:
-            #     x2_A = (1-mask_in2) * x2 # + mask_in2 * torch.mean(x2, dim=1, keepdim=True)
-            # else:
             x2_A = x2
-            x2_A = torch.cat([x2_A, mask_in2[:, 0, :, :].unsqueeze(1)], dim=1)
-            x1_B = torch.cat([x1, mask_in1[:, 0, :, :].unsqueeze(1)], dim=1)
+            x2_A = torch.cat((x2_A, mask_in2), dim=1)
+            x1_B = torch.cat((x1, mask_in1), dim=1)
             e_x2_A = self.E_A(x2_A, extract=extract)
             e_x1_B = self.E_B(x1_B, extract=None)
             if extract is None:
-                z2 = torch.cat([e_x2_A, e_x1_B], dim=1)
+                z2 = torch.cat((e_x2_A, e_x1_B), dim=1)
             else:
                 z2 = e_x2_A
-                z2[-1] = torch.cat([e_x2_A[-1], e_x1_B], dim=1)
+                z2[-1] = torch.cat((e_x2_A[-1], e_x1_B), dim=1)
             y2 = self.Decoder(z2)
 
         if mode is None:
-            y = torch.cat([y1.unsqueeze(1), y2.unsqueeze(1)], dim=1)
+            y = torch.cat((y1.unsqueeze(1), y2.unsqueeze(1)), dim=1)
         elif mode == 0:
             y = y1
         else:
@@ -329,27 +326,30 @@ class AutoEncoder2(nn.Module):
     def forward(self, x, mask_in, mode=None):
         N, B, C, H, W = x.shape
         if mode is None:
-            mask_in1 = mask_in[:, 0, :, :, :]
-            mask_in2 = mask_in[:, 1, :, :, :]
+            mask_in1 = mask_in[:, 0, 0, :, :].unsuqeeze(1)
+            mask_in2 = mask_in[:, 1, 0, :, :].unsuqeeze(1)
         else:
-            mask_in1 = mask_in
-            mask_in2 = mask_in
+            mask_in1 = mask_in[:, 0, :, :].unsuqeeze(1)
+            mask_in2 = mask_in[:, 0, :, :].unsuqeeze(1)
+
+        mask_in1 = torch.cat((mask_in1, 1 - mask_in1), dim=1)
+        mask_in2 = torch.cat((mask_in2, 1 - mask_in2), dim=1)
 
         x1 = x[:, 0, :, :, :]
         x2 = x[:, 1, :, :, :]
 
         if mode is None or mode == 0:
             x1_A = x1
-            x1_A = torch.cat([x1_A, mask_in1[:, 0, :, :].unsqueeze(1)], dim=1)
-            x2_B = torch.cat([x2, mask_in2[:, 0, :, :].unsqueeze(1)], dim=1)
+            x1_A = torch.cat([x1_A, mask_in1], dim=1)
+            x2_B = torch.cat([x2, mask_in2], dim=1)
             e_x1_A = self.E(x1_A)
             e_x2_B = self.E(x2_B)
             z1 = torch.cat([e_x1_A, e_x2_B], dim=1)
             y1 = self.Decoder(z1)
         if mode is None or mode == 1:
             x2_A = x2
-            x2_A = torch.cat([x2_A, mask_in2[:, 0, :, :].unsqueeze(1)], dim=1)
-            x1_B = torch.cat([x1, mask_in1[:, 0, :, :].unsqueeze(1)], dim=1)
+            x2_A = torch.cat([x2_A, mask_in2], dim=1)
+            x1_B = torch.cat([x1, mask_in1], dim=1)
             e_x2_A = self.E(x2_A)
             e_x1_B = self.E(x1_B)
             z2 = torch.cat([e_x2_A, e_x1_B], dim=1)
