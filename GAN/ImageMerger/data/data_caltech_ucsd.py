@@ -114,14 +114,14 @@ def create_dataset_caltech_ucsd(path, batch_size, imsize=128, type='pickle', mod
     images, masks, labels, testset = load_caltech_data(path, imsize, type, mode, size=size, testset=testset)
 
     caltech_data = np.concatenate([images, masks], axis=1).astype(np.float32)
-    dataset = ArrayDataset(caltech_data, labels=labels)
+    dataset = ArrayDataset(caltech_data, labels=labels.astype(np.int64))
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
     if testset is not None:
         testset['images'] = torch.from_numpy(np.concatenate([testset['images'], testset['masks']], axis=1).astype(np.float32))
-        testset['labels'] = torch.from_numpy(testset['labels'])
+        testset['labels'] = torch.from_numpy(testset['labels'].astype(np.int64))
         testset.pop('masks')
-    return dataloader, torch.from_numpy(caltech_data), torch.from_numpy(labels), testset
+    return dataloader, torch.from_numpy(caltech_data), torch.from_numpy(labels.astype(np.int64)), testset
 
 
 if __name__ == '__main__':
