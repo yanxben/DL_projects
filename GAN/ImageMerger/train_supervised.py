@@ -57,8 +57,8 @@ depth = 6
 extract = [2, 4, depth]
 plot = True
 #mode = 'classification'
-#mode = 're-identification'
-mode = 'autoencoder'
+mode = 're-identification'
+#mode = 'autoencoder'
 
 
 
@@ -66,9 +66,11 @@ if __name__ == '__main__':
     print(torch.cuda.current_device())
     t0 = time.time()
     #opt = TrainOptions().parse()   # get training options
-    _, caltech_data, caltech_labels, testset = create_dataset_caltech_ucsd('C:/Datasets/Caltech-UCSD-Birds-200', batch_size, imsize=imsize, size=256, testset=testset)  # create a dataset given opt.dataset_mode and other options
+    _, caltech_data, caltech_meta, testset = create_dataset_caltech_ucsd('C:/Datasets/Caltech-UCSD-Birds-200', batch_size, imsize=imsize, mode='range', testset=testset)  # create a dataset given opt.dataset_mode and other options
     #dataset_size = len(dataset)    # get the number of images in the dataset.
     #print('The number of training epochs = %d' % dataset_size)
+    caltech_labels = caltech_meta['labels']
+    caltech_bboxes = caltech_meta['bboxes']
     print('The number of training images = %d' % caltech_data.shape[0])
 
     validationset = torch.zeros(2 * len(set(caltech_labels.numpy())), dtype=torch.long)
