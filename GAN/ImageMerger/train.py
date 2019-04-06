@@ -55,7 +55,7 @@ if __name__ == '__main__':
         caltech_path = 'C:/Datasets/Caltech-UCSD-Birds-200'
     elif socket.gethostname() == 'ubuntu-1':
         caltech_path = '/home/yanivbenny/Datasets/Caltech-UCSD-Birds-200'
-    _, caltech_data, caltech_meta, testset = create_dataset_caltech_ucsd(caltech_path, opt.batch_size, mode=opt.data_mode, imsize=opt.input_size, testset=testset)  # create a dataset given opt.dataset_mode and other options
+    _, caltech_data, caltech_meta, testset = create_dataset_caltech_ucsd(caltech_path, opt.batch_size, size=256, mode=opt.data_mode, imsize=opt.input_size, testset=testset)  # create a dataset given opt.dataset_mode and other options
 
     caltech_labels = caltech_meta['labels']
     caltech_bboxes = caltech_meta['bboxes']
@@ -119,17 +119,17 @@ if __name__ == '__main__':
                 indices = (caltech_labels != label_a).nonzero()
                 batch_n[k] = indices[torch.randint(indices.numel(), (1,))]
 
-                if opt.data_mode=='range':
-                    bboxes = [caltech_bboxes[b] for b in batch]
-                    images = crop_data(caltech_data[batch], bboxes, opt.input_size)
-                    bboxes = [caltech_bboxes[b] for b in batch_a]
-                    images_a = crop_data(caltech_data[batch_a], bboxes, opt.input_size)
-                    bboxes = [caltech_bboxes[b] for b in batch_n]
-                    images_n = crop_data(caltech_data[batch_n], bboxes, opt.input_size)
-                if opt.data_mode=='cropped':
-                    images = caltech_data[batch]
-                    images_a = caltech_data[batch_a]
-                    images_n = caltech_data[batch_n]
+            if opt.data_mode=='range':
+                bboxes = [caltech_bboxes[b] for b in batch]
+                images = crop_data(caltech_data[batch], bboxes, opt.input_size)
+                bboxes = [caltech_bboxes[b] for b in batch_a]
+                images_a = crop_data(caltech_data[batch_a], bboxes, opt.input_size)
+                bboxes = [caltech_bboxes[b] for b in batch_n]
+                images_n = crop_data(caltech_data[batch_n], bboxes, opt.input_size)
+            if opt.data_mode=='cropped':
+                images = caltech_data[batch]
+                images_a = caltech_data[batch_a]
+                images_n = caltech_data[batch_n]
 
             model_input = {'real_G': images[:, :C-1, :, :].reshape([-1, 2, C-1, opt.input_size, opt.input_size]),  # image pairs for generator
                            'mask_G': images[:, C-1, :, :].unsqueeze(1).unsqueeze(1).reshape([-1, 2, 1, opt.input_size, opt.input_size]),  # mask for real_G
