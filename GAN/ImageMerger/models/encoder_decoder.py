@@ -45,13 +45,13 @@ class E1(nn.Module):
         self.blocks[str(0)] = EncoderBlock(self.input_nc, 32, activation=activation, dropout=dropout)
         for d in range(1, depth-1):
             self.blocks[str(d)] = EncoderBlock(32*(2 ** min(4,d-1)), 32*(2 ** min(4,d)), activation=activation, dropout=dropout)
-        self.blocks[str(depth-1)] = EncoderBlock(32 * (2 ** min(4,depth - 1)), last_conv_nc - sep, activation=activation, dropout=dropout)
+        self.blocks[str(depth-1)] = EncoderBlock(32 * (2 ** min(4,depth - 2)), last_conv_nc - sep, activation=activation, dropout=dropout)
 
     def forward(self, x, extract=None):
         x = [x]
         for d in range(self.depth):
             x.append(self.blocks[str(d)](x[-1]))
-            #print(x[-1].shape)
+            # print(x[-1].shape)
 
         x[self.depth] = x[self.depth].view(-1, (self.last_conv_nc - self.sep) * self.feature_size * self.feature_size)
         if extract is None:
@@ -79,7 +79,7 @@ class E2(nn.Module):
         x = [x]
         for d in range(self.depth):
             x.append(self.blocks[str(d)](x[-1]))
-            #print(x[-1].shape)
+            # print(x[-1].shape)
 
         x[self.depth] = x[self.depth].view(-1, self.sep * self.feature_size * self.feature_size)
         if extract is None:
@@ -116,6 +116,8 @@ class Decoder(nn.Module):
         y = x[self.depth].view(-1, self.last_conv_nc, self.feature_size, self.feature_size)
 
         for d in reversed(range(0, self.depth)):
+            # print(d)
+            # print(y.shape)
             y = self.blocks[str(d)](y)
             if x[d] is not None:
                 y = self.skip[str(d)](torch.cat((y, x[d]), dim=1))
@@ -169,7 +171,12 @@ class Generator(nn.Module):
                 z1 = torch.cat((e_x1_A, e_x2_B), dim=1)
             else:
                 z1 = e_x1_A
+                # print('before z')
+                # print(e_x1_A[-1].shape)
+                # print(e_x2_B.shape)
                 z1[-1] = torch.cat((e_x1_A[-1], e_x2_B), dim=1)
+                # print('after z')
+            # print('decoding')
             y1 = self.Decoder(z1)
         if mode is None or mode == 1:
             x2_A = x2
