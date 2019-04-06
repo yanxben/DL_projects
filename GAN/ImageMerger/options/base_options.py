@@ -24,7 +24,7 @@ class BaseOptions():
         parser.add_argument('--stl_path', type=str, default='C:/Datasets', help='path to images')
         parser.add_argument('--stl_mask_path', type=str, default='C:/Datasets/masks/stl10_birds', help='path to image masks')
         parser.add_argument('--data_mode', type=str, default='range', help='mode fore data read. in (range, cropped)')
-        parser.add_argument('--data_size', default=None, help='size of data (int). None means all data')
+        parser.add_argument('--data_size', type=int, default=None, help='size of data (int). None means all data')
         parser.add_argument('--name', type=str, default='experiment_name', help='name of the experiment. It decides where to store samples and models')
         parser.add_argument('--gpu_ids', type=str, default='0', help='gpu ids: e.g. 0  0,1,2, 0,2. use -1 for CPU')
         parser.add_argument('--checkpoints_dir', type=str, default='./checkpoints', help='models are saved here')
