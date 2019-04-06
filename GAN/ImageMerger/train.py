@@ -65,6 +65,9 @@ if __name__ == '__main__':
     print('The number of training epochs = %d' % (dataset_size // opt.batch_size))
     print('The number of training images = %d' % dataset_size)
 
+    if opt.data_mode == 'range':
+        testset['images'] = crop_data(testset['images'], testset['bboxes'], opt.input_size)
+
     model_test_input = {'real_G': testset['images'][:, :C-1, :, :].reshape([-1, 2, C-1, H, W]),
                         'mask_G': testset['images'][:, C-1, :, :].unsqueeze(1).unsqueeze(1).reshape([-1, 2, 1, H, W]),
                         'real_D': testset['images'][:, :C-1, :, :],

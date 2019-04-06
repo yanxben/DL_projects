@@ -18,7 +18,7 @@ from util.caltech_images import fit_square
 
 def crop_data(images, bboxes, imsize):
     old_imsize = images.shape[2]
-    images_out = torch.zeros(images.shape[0], images.shape[1], imsize, imsize)
+    images_out = 0.5 * torch.ones(size=(images.shape[0], images.shape[1], imsize, imsize))
     for k in range(images.shape[0]):
         left, top, delta = bboxes[k]['left'], bboxes[k]['top'], bboxes[k]['delta']
         delta2 = random.randint(delta, old_imsize)
@@ -55,14 +55,14 @@ def load_caltech_data(path, imsize=128, type='pickle', mode='cropped', min_count
         N = min(N, size)
     if mode == 'cropped':
         modesize = imsize
-        images = np.ones((N, 3, modesize, modesize)) / 2
+        images = 0.5 * np.ones((N, 3, modesize, modesize))
         masks = np.zeros((N, 1, modesize, modesize))
         labels = np.zeros((N,))
         bboxes = []
 
     if mode == 'range':
         modesize = imsize + 20
-        images = np.ones((N, 3, modesize, modesize)) / 2
+        images = 0.5 * np.ones((N, 3, modesize, modesize))
         masks = np.zeros((N, 1, modesize, modesize))
         labels = np.zeros((N,))
         bboxes = []
@@ -118,7 +118,7 @@ def load_caltech_data(path, imsize=128, type='pickle', mode='cropped', min_count
                                      top - (delta - height)//2,
                                      delta, H, W, allow_shrink=False)
                 left, top, height, width = int(rect.get_x()), int(rect.get_y()), int(rect.get_height()), int(rect.get_width())
-                image_delta = np.zeros([delta, delta, 3])
+                image_delta = 255. * np.ones([delta, delta, 3]) / 2
                 mask_delta = np.zeros([delta, delta])
                 image_delta[max(-top,0):min(delta, H-top), max(-left,0):min(delta, W-left), :] = \
                     image[max(0,top):min(top+delta, H), max(0,left):min(left+delta, W), :]

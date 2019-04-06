@@ -53,6 +53,7 @@ class mergeganmodel(BaseModel):
 
             parser.add_argument('--background', action='store_false', help='use background')
             parser.add_argument('--attention', action='store_true', help='use attention layer')
+            parser.add_argument('--mask_ReID', action='store_false', help='use mask before ReID')
 
             parser.add_argument('--lambda_G1', type=float, default=0.5,
                                 help='weight for cycle loss (A -> B -> A)')
@@ -158,6 +159,10 @@ class mergeganmodel(BaseModel):
                 self.mask_D = model_input['mask_D'].clone()
                 self.mask_G = self.mask_G.expand_as(self.real_G)
                 self.mask_D = self.mask_D.expand_as(self.real_D)
+                self.mask_a = model_input['mask_a'].clone()  # anchor images for ReID
+                self.mask_n = model_input['mask_n'].clone()  # negative images for ReID
+                self.mask_a = self.mask_a.expand_as(self.real_a)
+                self.mask_n = self.mask_n.expand_as(self.real_n)
 
         self.input_mode = input_mode
         #if self.input_mode == 'mix':
@@ -187,6 +192,8 @@ class mergeganmodel(BaseModel):
                 if not self.opt.attention:
                     self.mask_G = self.mask_G.to(self.device)
                     self.mask_D = self.mask_D.to(self.device)
+                    self.mask_a = self.mask_a.to(self.device)
+                    self.mask_n = self.mask_n.to(self.device)
 
     def preprocess(self, opt=None, load=False):
         # This function preprocesses the inputs with augmentation.
@@ -215,15 +222,19 @@ class mergeganmodel(BaseModel):
             flip = torch.randint(2, (N3, 1, 1, 1)).expand_as(self.real_a)
             if not load: flip = flip.to(self.device)
             self.real_a = torch.where(flip == 1, self.real_a.flip(3), self.real_a)
+            self.mask_a = torch.where(flip == 1, self.mask_a.flip(3), self.mask_a)
             flip = torch.randint(2, (N3, 1, 1, 1)).expand_as(self.real_a)
             if not load: flip = flip.to(self.device)
             self.real_n = torch.where(flip == 1, self.real_n.flip(3), self.real_n)
+            self.mask_n = torch.where(flip == 1, self.mask_n.flip(3), self.mask_n)
 
         # 2. Shift
         # 3. Rotate
 
         self.mask_G = torch.where(self.mask_G >= 0.5, torch.ones_like(self.mask_G), torch.zeros_like(self.mask_G))
         self.mask_D = torch.where(self.mask_D >= 0.5, torch.ones_like(self.mask_D), torch.zeros_like(self.mask_D))
+        self.mask_a = torch.where(self.mask_a >= 0.5, torch.ones_like(self.mask_a), torch.zeros_like(self.mask_a))
+        self.mask_n = torch.where(self.mask_n >= 0.5, torch.ones_like(self.mask_n), torch.zeros_like(self.mask_n))
 
         self.real_G_ref = self.real_G.clone()
         #self.real_D_ref = self.real_D.clone()
@@ -322,13 +333,22 @@ class mergeganmodel(BaseModel):
         self.loss_Disc.backward()
 
         # ReID
+
+        if self.opt.mask_ReID:
+            real_a_embed = self.netReID(torch.where(self.mask_a, self.real_a, torch.zeros_like(self.real_a)))
+            real_p_embed = self.netReID(torch.where(self.mask_G[:, self.B], self.real_G[:, self.B], torch.zeros_like(self.real_G[:, self.B])))
+            #real_p_embed = self.netReID(self.real_G[:,self.B])
+            real_n_embed = self.netReID(torch.where(self.mask_n, self.real_n, torch.zeros_like(self.real_n)))
+            fake_p_embed = self.netReID(torch.where(self.mask_G[:, self.A], self.fake_G[:, self.A], torch.zeros_like(self.fake_G[:, self.A])))
+            #fake_p_embed = self.netReID(self.fake_G[:, self.A].detach())
+        else:
+            real_a_embed = self.netReID(self.real_a)
+            real_p_embed = self.netReID(self.real_G[:, self.B])
+            real_n_embed = self.netReID(self.real_n)
+            fake_p_embed = self.netReID(self.fake_G[:, self.A].detach())
         # real
-        real_a_embed = self.netReID(self.real_a)
-        real_p_embed = self.netReID(self.real_G[:,self.B])
-        real_n_embed = self.netReID(self.real_n)
         loss_ReID_real = self.criterionReID1(real_a_embed, real_p_embed, real_n_embed)
         # fake
-        fake_p_embed = self.netReID(self.fake_G[:,self.A].detach())
         loss_ReID_fake = self.criterionReID1(real_a_embed, real_p_embed, fake_p_embed)
         # Combine loss and calculate gradients
         self.loss_ReID = (loss_ReID_real + loss_ReID_fake) * 0.5
@@ -343,8 +363,12 @@ class mergeganmodel(BaseModel):
         self.loss_GDisc = self.criterionGAN(self.netDisc(fake_D), True)
 
         # ReID loss ReID(anchor, G(A,B))
-        real_a_embed = self.netReID(self.real_a)
-        fake_p_embed = self.netReID(self.fake_G[:,self.A])
+        if self.opt.mask_ReID:
+            real_a_embed = self.netReID(torch.where(self.mask_a, self.real_a, torch.zeros_like(self.real_a)))
+            fake_p_embed = self.netReID(torch.where(self.mask_G[:,self.A], self.fake_G[:,self.A], torch.zeros_like(self.fake_G[:,self.A])))
+        else:
+            real_a_embed = self.netReID(self.real_a)
+            fake_p_embed = self.netReID(self.fake_G[:,self.A])
         self.loss_GReID = torch.mean(self.criterionReID2(real_a_embed, fake_p_embed)) * self.opt.lambda_ReID
 
         # GAN Background loss
