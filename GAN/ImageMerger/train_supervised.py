@@ -32,7 +32,7 @@ from torch import nn
 
 from models.encoder_decoder import DiscriminatorReID, DiscriminatorTriplet, Classifier200, Generator, AutoEncoder2
 from options.train_options import TrainOptions
-from data.data_caltech_ucsd import create_dataset_caltech_ucsd
+from data.data_caltech_ucsd import create_dataset_caltech_ucsd, crop_data
 from models import create_model
 
 #from util.visualizer import Visualizer
@@ -63,7 +63,6 @@ mode = 're-identification'
 
 
 if __name__ == '__main__':
-    print(torch.cuda.current_device())
     t0 = time.time()
     #opt = TrainOptions().parse()   # get training options
     _, caltech_data, caltech_meta, testset = create_dataset_caltech_ucsd('C:/Datasets/Caltech-UCSD-Birds-200', batch_size, imsize=imsize, mode='range', testset=testset)  # create a dataset given opt.dataset_mode and other options
@@ -139,6 +138,13 @@ if __name__ == '__main__':
                 images_a, images_p, images_n = caltech_data[batch, :C-1], caltech_data[batch_p, :C-1], caltech_data[batch_n, :C-1]
 
                 # Preprocess
+                bboxes = [caltech_bboxes[b] for b in batch]
+                images_a = crop_data(images_a, bboxes, imsize)
+                bboxes = [caltech_bboxes[b] for b in batch_p]
+                images_p = crop_data(images_p, bboxes, imsize)
+                bboxes = [caltech_bboxes[b] for b in batch_n]
+                images_n = crop_data(images_n, bboxes, imsize)
+
                 flip = torch.randint(2, (batch_size, 1, 1, 1)).expand_as(images_a)
                 images_a = torch.where(flip == 1, images_a.flip(3), images_a)
                 flip = torch.randint(2, (batch_size, 1, 1, 1)).expand_as(images_p)
@@ -149,9 +155,14 @@ if __name__ == '__main__':
 
             if mode=='autoencoder':
                 _, C, H, W = caltech_data.shape
-                labels = caltech_data[batch, :C-1, :, :]
-                mask = caltech_data[batch, C-1, :, :].unsqueeze(1).expand([batch_size, 2, H, W])
-                images = caltech_data[batch, :C-1, :, :].unsqueeze(1).expand([batch_size, 2, C-1, H, W])
+                images = caltech_data[batch, :, :, :]
+                images = crop_data(images, caltech_bboxes[batch], imsize)
+
+                flip = torch.randint(2, (batch_size, 1, 1, 1)).expand_as(images)
+                images = torch.where(flip == 1, images.flip(3), images)
+                labels = images[:, :C-1, :, :]
+                mask = images[:, C-1, :, :].unsqueeze(1).expand([batch_size, 2, H, W])
+                images = images[:, :C-1, :, :].unsqueeze(1).expand([batch_size, 2, C-1, H, W])
                 images = im2tensor(images)
 
             # Zero the parameter gradients
