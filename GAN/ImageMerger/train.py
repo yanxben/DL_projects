@@ -66,14 +66,15 @@ if __name__ == '__main__':
     print('The number of training images = %d' % dataset_size)
 
     if opt.data_mode == 'range':
-        testset['images'] = crop_data(testset['images'], testset['bboxes'], opt.input_size)
+        testset['images'] = crop_data(testset['images'][:4], testset['bboxes'], opt.input_size)
+        testlen = testset['images'].shape[0]
 
-    model_test_input = {'real_G': testset['images'][:, :C-1, :, :].reshape([-1, 2, C-1, H, W]),
-                        'mask_G': testset['images'][:, C-1, :, :].unsqueeze(1).unsqueeze(1).reshape([-1, 2, 1, H, W]),
-                        'real_D': testset['images'][:, :C-1, :, :],
-                        'mask_D': testset['images'][:, C-1, :, :].unsqueeze(1),
-                        'real_a': testset['images'][:testlen//2, :C-1, :, :],  # Unused
-                        'real_n': testset['images'][:testlen//2, :C-1, :, :]  # Unused
+    model_test_input = {'real_G': testset['images'][:, :3, :, :].reshape([-1, 2, 3, opt.input_size, opt.input_size]),
+                        'mask_G': testset['images'][:, 3, :, :].unsqueeze(1).unsqueeze(1).reshape([-1, 2, 1, opt.input_size, opt.input_size]),
+                        'real_D': testset['images'][:, :3, :, :],
+                        'mask_D': testset['images'][:, 3, :, :].unsqueeze(1),
+                        'real_a': testset['images'][:testlen//2, :3, :, :],  # Unused
+                        'real_n': testset['images'][:testlen//2, :3, :, :]  # Unused
                         }
 
     #caltech_data = caltech_data.cuda()
@@ -134,14 +135,14 @@ if __name__ == '__main__':
                 images_a = caltech_data[batch_a]
                 images_n = caltech_data[batch_n]
 
-            model_input = {'real_G': images[:, :C-1, :, :].reshape([-1, 2, C-1, opt.input_size, opt.input_size]),  # image pairs for generator
-                           'mask_G': images[:, C-1, :, :].unsqueeze(1).unsqueeze(1).reshape([-1, 2, 1, opt.input_size, opt.input_size]),  # mask for real_G
-                           'real_D': images[:, :C-1, :, :],  # real images for discriminator
-                           'mask_D': images[:, C-1, :, :].unsqueeze(1),  # mask for real_D
-                           'real_a': images_a[:, :C-1, :, :],  # anchor images for ReID
-                           'mask_a': images_a[:, C-1, :, :].unsqueeze(1),  # mask for ReID
-                           'real_n': images_n[:, :C-1, :, :],  # negative images for ReID
-                           'mask_n': images_n[:, C-1, :, :].unsqueeze(1),  # mask for ReID
+            model_input = {'real_G': images[:, :3, :, :].reshape([-1, 2, 3, opt.input_size, opt.input_size]),  # image pairs for generator
+                           'mask_G': images[:, 3, :, :].unsqueeze(1).unsqueeze(1).reshape([-1, 2, 1, opt.input_size, opt.input_size]),  # mask for real_G
+                           'real_D': images[:, :3, :, :],  # real images for discriminator
+                           'mask_D': images[:, 3, :, :].unsqueeze(1),  # mask for real_D
+                           'real_a': images_a[:, :3, :, :],  # anchor images for ReID
+                           'mask_a': images_a[:, 3, :, :].unsqueeze(1),  # mask for ReID
+                           'real_n': images_n[:, :3, :, :],  # negative images for ReID
+                           'mask_n': images_n[:, 3, :, :].unsqueeze(1),  # mask for ReID
                            }
 
             model.set_input(model_input, 'mix' if i % 1 == 0 else 'reflection', load=True)  # unpack data from dataset and apply preprocessing

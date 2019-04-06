@@ -335,11 +335,11 @@ class mergeganmodel(BaseModel):
         # ReID
 
         if self.opt.mask_ReID:
-            real_a_embed = self.netReID(torch.where(self.mask_a, self.real_a, torch.zeros_like(self.real_a)))
-            real_p_embed = self.netReID(torch.where(self.mask_G[:, self.B], self.real_G[:, self.B], torch.zeros_like(self.real_G[:, self.B])))
+            real_a_embed = self.netReID(torch.where(self.mask_a>0, self.real_a, torch.zeros_like(self.real_a)))
+            real_p_embed = self.netReID(torch.where(self.mask_G[:, self.B]>0, self.real_G[:, self.B], torch.zeros_like(self.real_G[:, self.B])))
             #real_p_embed = self.netReID(self.real_G[:,self.B])
-            real_n_embed = self.netReID(torch.where(self.mask_n, self.real_n, torch.zeros_like(self.real_n)))
-            fake_p_embed = self.netReID(torch.where(self.mask_G[:, self.A], self.fake_G[:, self.A], torch.zeros_like(self.fake_G[:, self.A])))
+            real_n_embed = self.netReID(torch.where(self.mask_n>0, self.real_n, torch.zeros_like(self.real_n)))
+            fake_p_embed = self.netReID(torch.where(self.mask_G[:, self.A]>0, self.fake_G[:, self.A], torch.zeros_like(self.fake_G[:, self.A])))
             #fake_p_embed = self.netReID(self.fake_G[:, self.A].detach())
         else:
             real_a_embed = self.netReID(self.real_a)
@@ -364,8 +364,8 @@ class mergeganmodel(BaseModel):
 
         # ReID loss ReID(anchor, G(A,B))
         if self.opt.mask_ReID:
-            real_a_embed = self.netReID(torch.where(self.mask_a, self.real_a, torch.zeros_like(self.real_a)))
-            fake_p_embed = self.netReID(torch.where(self.mask_G[:,self.A], self.fake_G[:,self.A], torch.zeros_like(self.fake_G[:,self.A])))
+            real_a_embed = self.netReID(torch.where(self.mask_a>0, self.real_a, torch.zeros_like(self.real_a)))
+            fake_p_embed = self.netReID(torch.where(self.mask_G[:,self.A]>0, self.fake_G[:,self.A], torch.zeros_like(self.fake_G[:,self.A])))
         else:
             real_a_embed = self.netReID(self.real_a)
             fake_p_embed = self.netReID(self.fake_G[:,self.A])
