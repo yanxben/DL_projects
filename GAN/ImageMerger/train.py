@@ -73,8 +73,10 @@ if __name__ == '__main__':
                         'mask_G': testset['images'][:, 3, :, :].unsqueeze(1).unsqueeze(1).reshape([-1, 2, 1, opt.input_size, opt.input_size]),
                         'real_D': testset['images'][:, :3, :, :],
                         'mask_D': testset['images'][:, 3, :, :].unsqueeze(1),
-                        'real_a': testset['images'][:testlen//2, :3, :, :],  # Unused
-                        'real_n': testset['images'][:testlen//2, :3, :, :]  # Unused
+                        'real_a': testset['images'][:testlen//2, :3, :, :],                 # Unused
+                        'mask_a': testset['images'][:testlen // 2, 3, :, :].unsqueeze(1),   # Unused
+                        'real_n': testset['images'][:testlen//2, :3, :, :],                 # Unused
+                        'mask_n': testset['images'][:testlen//2, 3, :, :].unsqueeze(1)      # Unused
                         }
 
     #caltech_data = caltech_data.cuda()
