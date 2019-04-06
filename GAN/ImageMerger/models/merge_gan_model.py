@@ -109,7 +109,7 @@ class mergeganmodel(BaseModel):
         self.B = 1
 
         # Define Generator
-        self.netGen = encoder_decoder.Generator(opt.input_nc + (1 if opt.background else 0), opt.input_nc, opt.last_conv_nc, opt.sep, opt.input_size, opt.depth).to(self.device)
+        self.netGen = encoder_decoder.Generator(opt.input_nc + (1 if opt.background else 0), opt.input_nc, opt.last_conv_nc, opt.sep, opt.input_size, opt.depth, extract=[2, 4, opt.depth]).to(self.device)
         # Define Discriminators
         if self.isTrain:
             self.netDisc = encoder_decoder.Discriminator(opt.input_nc, opt.last_conv_nc, opt.input_size, opt.depth).to(self.device)

@@ -24,7 +24,7 @@ import socket
 import time
 from options.train_options import TrainOptions
 from data.data_stl10 import create_dataset_stl10_bird
-from data.data_caltech_ucsd import create_dataset_caltech_ucsd
+from data.data_caltech_ucsd import create_dataset_caltech_ucsd, crop_data
 from models import create_model
 import matplotlib
 matplotlib.use('Agg')
@@ -55,7 +55,10 @@ if __name__ == '__main__':
         caltech_path = 'C:/Datasets/Caltech-UCSD-Birds-200'
     elif socket.gethostname() == 'ubuntu-1':
         caltech_path = '/home/yanivbenny/Datasets/Caltech-UCSD-Birds-200'
-    _, caltech_data, caltech_labels, testset = create_dataset_caltech_ucsd(caltech_path, opt.batch_size, imsize=opt.input_size, testset=testset)  # create a dataset given opt.dataset_mode and other options
+    _, caltech_data, caltech_meta, testset = create_dataset_caltech_ucsd(caltech_path, opt.batch_size, mode=opt.data_mode, imsize=opt.input_size, testset=testset)  # create a dataset given opt.dataset_mode and other options
+
+    caltech_labels = caltech_meta['labels']
+    caltech_bboxes = caltech_meta['bboxes']
 
     #dataset_size = caltech_data.shape[0]  #len(dataset)    # get the number of images in the dataset.
     dataset_size, C, H, W = caltech_data.shape
@@ -116,12 +119,27 @@ if __name__ == '__main__':
                 indices = (caltech_labels != label_a).nonzero()
                 batch_n[k] = indices[torch.randint(indices.numel(), (1,))]
 
-            model_input = {'real_G': caltech_data[batch, :C-1, :, :].reshape([-1,2,C-1,H,W]),  # image pairs for generator
-                           'mask_G': caltech_data[batch, C - 1, :, :].unsqueeze(1).unsqueeze(1).reshape([-1, 2, 1, H, W]),  # mask for real_G
-                           'real_D': caltech_data[batch, :C-1, :, :],  # real images for discriminator
-                           'mask_D': caltech_data[batch, C-1, :, :].unsqueeze(1),  # mask for real_D
-                           'real_a': caltech_data[batch_a, :C-1, :, :],  # anchor images for ReID
-                           'real_n': caltech_data[batch_n, :C-1, :, :]}  # negative images for ReID
+                if opt.data_mode=='range':
+                    bboxes = [caltech_bboxes[b] for b in batch]
+                    images = crop_data(caltech_data[batch], bboxes, opt.input_size)
+                    bboxes = [caltech_bboxes[b] for b in batch_a]
+                    images_a = crop_data(caltech_data[batch_a], bboxes, opt.input_size)
+                    bboxes = [caltech_bboxes[b] for b in batch_n]
+                    images_n = crop_data(caltech_data[batch_n], bboxes, opt.input_size)
+                if opt.data_mode=='cropped':
+                    images = caltech_data[batch]
+                    images_a = caltech_data[batch_a]
+                    images_n = caltech_data[batch_n]
+
+            model_input = {'real_G': images[:, :C-1, :, :].reshape([-1, 2, C-1, opt.input_size, opt.input_size]),  # image pairs for generator
+                           'mask_G': images[:, C-1, :, :].unsqueeze(1).unsqueeze(1).reshape([-1, 2, 1, opt.input_size, opt.input_size]),  # mask for real_G
+                           'real_D': images[:, :C-1, :, :],  # real images for discriminator
+                           'mask_D': images[:, C-1, :, :].unsqueeze(1),  # mask for real_D
+                           'real_a': images_a[:, :C-1, :, :],  # anchor images for ReID
+                           'mask_a': images_a[:, C-1, :, :].unsqueeze(1),  # mask for ReID
+                           'real_n': images_n[:, :C-1, :, :],  # negative images for ReID
+                           'mask_n': images_n[:, C-1, :, :].unsqueeze(1),  # mask for ReID
+                           }
 
             model.set_input(model_input, 'mix' if i % 1 == 0 else 'reflection', load=True)  # unpack data from dataset and apply preprocessing
             model.optimize_parameters()  # calculate loss functions, get gradients, update network weights

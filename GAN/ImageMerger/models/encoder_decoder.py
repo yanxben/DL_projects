@@ -124,7 +124,7 @@ class Decoder(nn.Module):
 
 
 class Generator(nn.Module):
-    def __init__(self, input_nc, output_nc, last_conv_nc, sep, input_size, depth, preprocess=False):
+    def __init__(self, input_nc, output_nc, last_conv_nc, sep, input_size, depth, preprocess=False, extract=None):
         super(Generator, self).__init__()
         self.input_nc = input_nc
         self.output_nc = output_nc
@@ -132,6 +132,7 @@ class Generator(nn.Module):
         self.sep = sep
         self.input_size = input_size
         self.preprocess = preprocess
+        self.extract = extract
 
         self.E_A = E1(self.input_nc, last_conv_nc, sep, input_size, depth)
         self.E_B = E2(self.input_nc, sep, input_size, depth)
@@ -139,6 +140,8 @@ class Generator(nn.Module):
 
     def forward(self, x, mask_in, mode=None, extract=None):
         N, B, C, H, W = x.shape
+        if extract is None:
+            extract = self.extract
         if mode is None:
             mask_in1 = mask_in[:, 0, 0, :, :].unsuqeeze(1)
             mask_in2 = mask_in[:, 1, 0, :, :].unsuqeeze(1)
