@@ -46,7 +46,7 @@ testset = ['Red_winged_Blackbird_0017_583846699', 'Yellow_headed_Blackbird_0009_
            'Gray_Catbird_0031_148467783', 'Purple_Finch_0006_2329434675',
            'American_Goldfinch_0004_155617438', 'Blue_Grosbeak_0008_2450854752',
            'Green_Kingfisher_0002_228927324', 'Pied_Kingfisher_0002_1020026028']
-testlen = len(testset)
+
 if __name__ == '__main__':
     t0 = time.time()
     opt = TrainOptions().parse()   # get training options
@@ -66,9 +66,9 @@ if __name__ == '__main__':
     print('The number of training images = %d' % dataset_size)
 
     if opt.data_mode == 'range':
-        testset['images'] = crop_data(testset['images'][:4], testset['bboxes'], opt.input_size)
-        testlen = testset['images'].shape[0]
+        testset['images'] = crop_data(testset['images'], testset['bboxes'], opt.input_size)
 
+    testlen = testset['images'].shape[0]
     model_test_input = {'real_G': testset['images'][:, :3, :, :].reshape([-1, 2, 3, opt.input_size, opt.input_size]),
                         'mask_G': testset['images'][:, 3, :, :].unsqueeze(1).unsqueeze(1).reshape([-1, 2, 1, opt.input_size, opt.input_size]),
                         'real_D': testset['images'][:, :3, :, :],
