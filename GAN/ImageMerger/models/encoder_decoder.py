@@ -143,11 +143,11 @@ class Generator(nn.Module):
         if extract is None:
             extract = self.extract
         if mode is None:
-            mask_in1 = mask_in[:, 0, 0, :, :].unsuqeeze(1)
-            mask_in2 = mask_in[:, 1, 0, :, :].unsuqeeze(1)
+            mask_in1 = mask_in[:, 0, 0, :, :].unsqueeze(1)
+            mask_in2 = mask_in[:, 1, 0, :, :].unsqueeze(1)
         else:
-            mask_in1 = mask_in[:, 0, :, :].unsuqeeze(1)
-            mask_in2 = mask_in[:, 0, :, :].unsuqeeze(1)
+            mask_in1 = mask_in[:, 0, :, :].unsqueeze(1)
+            mask_in2 = mask_in[:, 0, :, :].unsqueeze(1)
 
         mask_in1 = torch.cat((mask_in1, 1 - mask_in1), dim=1)
         mask_in2 = torch.cat((mask_in2, 1 - mask_in2), dim=1)
@@ -329,11 +329,11 @@ class AutoEncoder2(nn.Module):
     def forward(self, x, mask_in, mode=None):
         N, B, C, H, W = x.shape
         if mode is None:
-            mask_in1 = mask_in[:, 0, 0, :, :].unsuqeeze(1)
-            mask_in2 = mask_in[:, 1, 0, :, :].unsuqeeze(1)
+            mask_in1 = mask_in[:, 0, 0, :, :].unsqueeze(1)
+            mask_in2 = mask_in[:, 1, 0, :, :].unsqueeze(1)
         else:
-            mask_in1 = mask_in[:, 0, :, :].unsuqeeze(1)
-            mask_in2 = mask_in[:, 0, :, :].unsuqeeze(1)
+            mask_in1 = mask_in[:, 0, :, :].unsqueeze(1)
+            mask_in2 = mask_in[:, 0, :, :].unsqueeze(1)
 
         mask_in1 = torch.cat((mask_in1, 1 - mask_in1), dim=1)
         mask_in2 = torch.cat((mask_in2, 1 - mask_in2), dim=1)
