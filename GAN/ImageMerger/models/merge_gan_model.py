@@ -339,7 +339,7 @@ class mergeganmodel(BaseModel):
             real_p_embed = self.netReID(torch.where(self.mask_G[:, self.B]>0, self.real_G[:, self.B], torch.zeros_like(self.real_G[:, self.B])))
             #real_p_embed = self.netReID(self.real_G[:,self.B])
             real_n_embed = self.netReID(torch.where(self.mask_n>0, self.real_n, torch.zeros_like(self.real_n)))
-            fake_p_embed = self.netReID(torch.where(self.mask_G[:, self.A]>0, self.fake_G[:, self.A], torch.zeros_like(self.fake_G[:, self.A])))
+            fake_p_embed = self.netReID(torch.where(self.mask_G[:, self.A]>0, self.fake_G[:, self.A].detach(), torch.zeros_like(self.fake_G[:, self.A])))
             #fake_p_embed = self.netReID(self.fake_G[:, self.A].detach())
         else:
             real_a_embed = self.netReID(self.real_a)
@@ -410,10 +410,10 @@ class mergeganmodel(BaseModel):
         # D
         self.set_requires_grad([self.netDisc, self.netReID], True)
         self.optimizer_Disc.zero_grad()     # set D gradients to zero
-        #self.optimizer_ReID.zero_grad()     # set D gradients to zero
+        self.optimizer_ReID.zero_grad()     # set D gradients to zero
         self.backward_D()                   # calculate gradients for D
         self.optimizer_Disc.step()          # update D weights
-        #self.optimizer_ReID.step()          # update D weights
+        self.optimizer_ReID.step()          # update D weights
 
     def runG(self, model_test_input=None):
         # Prepare data
