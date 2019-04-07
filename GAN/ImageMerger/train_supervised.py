@@ -107,7 +107,7 @@ if __name__ == '__main__':
         criterion = nn.CrossEntropyLoss()
     if model_mode=='re-identification':
         caltech_data = caltech_data.type(torch.FloatTensor)
-        model = DiscriminatorReID(caltech_data.shape[1] - 1, 512, imsize, depth=depth, out_features=64, dropout=0.)
+        model = DiscriminatorReID(caltech_data.shape[1] - 1, 256, imsize, depth=depth, out_features=32, dropout=0.1)
         criterion = nn.TripletMarginLoss()
     if model_mode=='autoencoder':
         model = Generator(caltech_data.shape[1], 3, 512, 256, imsize, depth=depth, preprocess=False)
