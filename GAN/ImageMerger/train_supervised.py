@@ -56,10 +56,10 @@ batch_size = 64
 imsize = 96
 depth = 5
 extract = [1, 3, depth]
-plot = False
-#mode = 'classification'
-model_mode = 're-identification'
-#mode = 'autoencoder'
+
+#model_mode = 'classification'
+#model_mode = 're-identification'
+model_mode = 'autoencoder'
 data_mode = 'cropped'
 
 
@@ -67,8 +67,10 @@ if __name__ == '__main__':
     t0 = time.time()
     #opt = TrainOptions().parse()   # get training options
     if socket.gethostname() == 'YABENN-P50':
+        plot = True
         caltech_path = 'C:/Datasets/Caltech-UCSD-Birds-200'
     elif socket.gethostname() == 'ubuntu-1':
+        plot = False
         caltech_path = '/home/yanivbenny/Datasets/Caltech-UCSD-Birds-200'
     _, caltech_data, caltech_meta, testset = create_dataset_caltech_ucsd(caltech_path, batch_size, imsize=imsize, mode=data_mode, testset=testset)  # create a dataset given opt.dataset_mode and other options
     #dataset_size = len(dataset)    # get the number of images in the dataset.
@@ -110,7 +112,7 @@ if __name__ == '__main__':
         model = DiscriminatorReID(caltech_data.shape[1] - 1, 512, imsize, depth=depth, out_features=64, dropout=0.)
         criterion = nn.TripletMarginLoss()
     if model_mode=='autoencoder':
-        model = Generator(caltech_data.shape[1], 3, 512, 256, imsize, depth=depth, preprocess=False)
+        model = Generator(5, 3, 512, 256, imsize, depth=depth, preprocess=False)
         criterion = nn.MSELoss()
 
     model.cuda()
@@ -166,7 +168,9 @@ if __name__ == '__main__':
             if model_mode=='autoencoder':
                 _, C, H, W = caltech_data.shape
                 images = caltech_data[batch, :, :, :]
-                images = crop_data(images, caltech_bboxes[batch], imsize)
+                if data_mode == 'range':
+                    bboxes = [caltech_bboxes[b] for b in batch]
+                    images = crop_data(images, bboxes, imsize)
 
                 flip = torch.randint(2, (batch_size, 1, 1, 1)).expand_as(images)
                 images = torch.where(flip == 1, images.flip(3), images)
