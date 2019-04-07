@@ -62,6 +62,7 @@ extract = [1, 3, depth]
 model_mode = 'autoencoder'
 data_mode = 'cropped'
 
+epochs = 400
 
 if __name__ == '__main__':
     t0 = time.time()
@@ -116,12 +117,12 @@ if __name__ == '__main__':
         criterion = nn.MSELoss()
 
     model.cuda()
-    optimizer = optim.Adam(model.parameters())
+    optimizer = optim.Adam(model.parameters(), lr=0.0002)
 
     print('End of initialization. Time Taken: %d sec' % (time.time() - t0))
 
     total_iters = 0  # the total number of training iterations
-    for epoch in range(1, 400):    # outer loop for different epochs; we save the model by <epoch_count>, <epoch_count>+<save_latest_freq>
+    for epoch in range(1, epochs):    # outer loop for different epochs; we save the model by <epoch_count>, <epoch_count>+<save_latest_freq>
         epoch_start_time = time.time()  # timer for entire epoch
         epoch_iter = 0                  # the number of training iterations in current epoch, reset to 0 every epoch
         num_iterations = 0
@@ -178,6 +179,7 @@ if __name__ == '__main__':
                 mask = images[:, C-1, :, :].unsqueeze(1).expand([batch_size, 2, H, W])
                 images = images[:, :C-1, :, :].unsqueeze(1).expand([batch_size, 2, C-1, H, W])
                 images = im2tensor(images)
+                images[:,0] = torch.where(mask[:,0].unsqueeze(1).expand_as(images[:,0]) > .5, torch.zeros_like(images[:,0]), images[:,0])
 
             # Zero the parameter gradients
             optimizer.zero_grad()
@@ -187,7 +189,7 @@ if __name__ == '__main__':
                 embed_a, embed_p, embed_n = model(images_a.cuda()), model(images_p.cuda()), model(images_n.cuda())
                 loss = criterion(embed_a, embed_p, embed_n)
             if model_mode == 'autoencoder':
-                yhat = model(images.cuda(), mask_in=mask.cuda(), mode=0, extract=extract)
+                yhat = model(images.cuda(), mask_in=mask.cuda(), mode=0, extract=extract, use_activation=False)
                 loss = criterion(yhat, labels.cuda())
 
             # Run backward
@@ -235,18 +237,28 @@ if __name__ == '__main__':
                     mask = caltech_data[validationset, C - 1, :, :].unsqueeze(1).expand([validationset.shape[0], 2, H, W])
                     images = caltech_data[validationset, :C - 1, :, :].unsqueeze(1).expand([validationset.shape[0], 2, C - 1, H, W])
                     images = im2tensor(images)
+                    images[:, 0] = torch.where(mask[:, 0].unsqueeze(1).expand_as(images[:, 0]) > .5,
+                                               torch.zeros_like(images[:, 0]), images[:, 0])
 
-                    yhat = model(images.cuda(), mask_in=mask.cuda(), mode=0)
+                    yhat = model(images.cuda(), mask_in=mask.cuda(), mode=0, use_activation=False)
                     val_loss = criterion(yhat, labels.cuda())
+
+                    # last_data_images = tensor2im(images)
+                    # last_yhat = tensor2im(yhat.detach().cpu())
+
             print('Epoch {:d}: train loss {:.4f} --- val loss {:.4f}'.format(epoch, running_loss / num_iterations, val_loss))
 
             if plot:
                 if model_mode == 'autoencoder':
                     for m in range(6):
-                        plt.subplot(2, 6, m + 1)
-                        plt.imshow(last_data_images[m,0].permute([1, 2, 0]))
-                        plt.subplot(2, 6, m + 7)
+                        plt.subplot(4, 6, m + 1)
+                        plt.imshow(last_data_images[m,1].permute([1, 2, 0]))
+                        plt.subplot(4, 6, m + 7)
                         plt.imshow(last_yhat[m].permute([1, 2, 0]))
+                        plt.subplot(4, 6, m + 13)
+                        plt.imshow(tensor2im(images)[5*m,1].permute([1, 2, 0]))
+                        plt.subplot(4, 6, m + 19)
+                        plt.imshow(tensor2im(yhat.detach().cpu())[5*m].permute([1, 2, 0]))
 
                 if model_mode == 're-identification':
                     for m in range(4):
@@ -264,6 +276,7 @@ if __name__ == '__main__':
             #print('saving the model at the end of epoch %d, iters %d' % (epoch, total_iters))
             #save_suffix = 'epoch_%d' % epoch
             #model.save_networks(save_suffix)
+            print('End of epoch %d / %d \t Time Taken: %d sec' % (epoch, epochs, time.time() - epoch_start_time))
 
     print('DONE')
 

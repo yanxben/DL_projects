@@ -110,7 +110,7 @@ class Decoder(nn.Module):
 
         self.tanh = nn.Tanh()
 
-    def forward(self, x):
+    def forward(self, x, use_activation=True):
         if type(x) is not list:
             x = [None for _ in range(self.depth)] + [x]
         y = x[self.depth].view(-1, self.last_conv_nc, self.feature_size, self.feature_size)
@@ -122,7 +122,10 @@ class Decoder(nn.Module):
             if x[d] is not None:
                 y = self.skip[str(d)](torch.cat((y, x[d]), dim=1))
 
-        return self.tanh(y)
+        if use_activation:
+            return self.tanh(y)
+        else:
+            return y
 
 
 class Generator(nn.Module):
@@ -140,7 +143,7 @@ class Generator(nn.Module):
         self.E_B = E2(self.input_nc, sep, input_size, depth)
         self.Decoder = Decoder(output_nc, last_conv_nc, input_size, depth)
 
-    def forward(self, x, mask_in, mode=None, extract=None):
+    def forward(self, x, mask_in, mode=None, extract=None, use_activation=True):
         N, B, C, H, W = x.shape
         if extract is None:
             extract = self.extract
@@ -177,7 +180,7 @@ class Generator(nn.Module):
                 z1[-1] = torch.cat((e_x1_A[-1], e_x2_B), dim=1)
                 # print('after z')
             # print('decoding')
-            y1 = self.Decoder(z1)
+            y1 = self.Decoder(z1, use_activation=use_activation)
         if mode is None or mode == 1:
             x2_A = x2
             x2_A = torch.cat((x2_A, mask_in2), dim=1)
@@ -189,7 +192,7 @@ class Generator(nn.Module):
             else:
                 z2 = e_x2_A
                 z2[-1] = torch.cat((e_x2_A[-1], e_x1_B), dim=1)
-            y2 = self.Decoder(z2)
+            y2 = self.Decoder(z2, use_activation=use_activation)
 
         if mode is None:
             y = torch.cat((y1.unsqueeze(1), y2.unsqueeze(1)), dim=1)

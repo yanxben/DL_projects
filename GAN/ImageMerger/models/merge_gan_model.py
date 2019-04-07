@@ -247,12 +247,12 @@ class mergeganmodel(BaseModel):
             if not load: permute2 = permute2.to(self.device)
             permute3 = torch.randint(10, (N1, B1)) >= 5
             if not load: permute3 = permute3.to(self.device)
-            self.real_G[permute1] = torch.where(self.mask_G[permute1] == 1, self.real_G[permute1][:,  (1, 2, 0), :, :], self.real_G[permute1])
-            self.real_G[permute2] = torch.where(self.mask_G[permute2] == 1, self.real_G[permute2][:,  (0, 2, 1), :, :], self.real_G[permute2])
-            self.real_G[permute3] = torch.where(self.mask_G[permute3] == 1, self.real_G[permute3][:,  (2, 1, 0), :, :], self.real_G[permute3])
-            self.real_G_ref[permute1.flip(1)] = torch.where(self.mask_G[permute1.flip(1)] == 1, self.real_G_ref[permute1.flip(1)][:, (1, 2, 0), :, :], self.real_G_ref[permute1.flip(1)])
-            self.real_G_ref[permute2.flip(1)] = torch.where(self.mask_G[permute2.flip(1)] == 1, self.real_G_ref[permute2.flip(1)][:, (0, 2, 1), :, :], self.real_G_ref[permute2.flip(1)])
-            self.real_G_ref[permute3.flip(1)] = torch.where(self.mask_G[permute3.flip(1)] == 1, self.real_G_ref[permute3.flip(1)][:, (2, 1, 0), :, :], self.real_G_ref[permute3.flip(1)])
+            self.real_G[permute1] = torch.where(self.mask_G[permute1] >= .5, self.real_G[permute1][:,  (1, 2, 0), :, :], self.real_G[permute1])
+            self.real_G[permute2] = torch.where(self.mask_G[permute2] >= .5, self.real_G[permute2][:,  (0, 2, 1), :, :], self.real_G[permute2])
+            self.real_G[permute3] = torch.where(self.mask_G[permute3] >= .5, self.real_G[permute3][:,  (2, 1, 0), :, :], self.real_G[permute3])
+            self.real_G_ref[permute1.flip(1)] = torch.where(self.mask_G[permute1.flip(1)] >= .5, self.real_G_ref[permute1.flip(1)][:, (1, 2, 0), :, :], self.real_G_ref[permute1.flip(1)])
+            self.real_G_ref[permute2.flip(1)] = torch.where(self.mask_G[permute2.flip(1)] >= .5, self.real_G_ref[permute2.flip(1)][:, (0, 2, 1), :, :], self.real_G_ref[permute2.flip(1)])
+            self.real_G_ref[permute3.flip(1)] = torch.where(self.mask_G[permute3.flip(1)] >= .5, self.real_G_ref[permute3.flip(1)][:, (2, 1, 0), :, :], self.real_G_ref[permute3.flip(1)])
 
             permute1 = torch.randint(10, (N2,)) >= 5
             if not load: permute1 = permute1.to(self.device)
@@ -260,9 +260,9 @@ class mergeganmodel(BaseModel):
             if not load: permute2 = permute2.to(self.device)
             permute3 = torch.randint(10, (N2,)) >= 5
             if not load: permute3 = permute3.to(self.device)
-            self.real_D[permute1] = torch.where(self.mask_D[permute1] == 1, self.real_D[permute1][:, (1, 2, 0), :, :], self.real_D[permute1])
-            self.real_D[permute2] = torch.where(self.mask_D[permute2] == 1, self.real_D[permute2][:, (1, 2, 0), :, :], self.real_D[permute2])
-            self.real_D[permute3] = torch.where(self.mask_D[permute3] == 1, self.real_D[permute3][:, (1, 2, 0), :, :], self.real_D[permute3])
+            self.real_D[permute1] = torch.where(self.mask_D[permute1] >= .5, self.real_D[permute1][:, (1, 2, 0), :, :], self.real_D[permute1])
+            self.real_D[permute2] = torch.where(self.mask_D[permute2] >= .5, self.real_D[permute2][:, (1, 2, 0), :, :], self.real_D[permute2])
+            self.real_D[permute3] = torch.where(self.mask_D[permute3] >= .5, self.real_D[permute3][:, (1, 2, 0), :, :], self.real_D[permute3])
 
     def forward(self):
         """Run forward pass; called by both functions <optimize_parameters> and <test>."""
@@ -335,10 +335,10 @@ class mergeganmodel(BaseModel):
         # ReID
 
         if self.opt.mask_ReID:
-            real_a_embed = self.netReID(torch.where(self.mask_a>0, self.real_a, torch.zeros_like(self.real_a)))
+            real_a_embed = self.netReID(torch.where(self.mask_a >= .5, self.real_a, torch.zeros_like(self.real_a)))
             real_p_embed = self.netReID(torch.where(self.mask_G[:, self.B]>0, self.real_G[:, self.B], torch.zeros_like(self.real_G[:, self.B])))
             #real_p_embed = self.netReID(self.real_G[:,self.B])
-            real_n_embed = self.netReID(torch.where(self.mask_n>0, self.real_n, torch.zeros_like(self.real_n)))
+            real_n_embed = self.netReID(torch.where(self.mask_n >= .5, self.real_n, torch.zeros_like(self.real_n)))
             fake_p_embed = self.netReID(torch.where(self.mask_G[:, self.A]>0, self.fake_G[:, self.A].detach(), torch.zeros_like(self.fake_G[:, self.A])))
             #fake_p_embed = self.netReID(self.fake_G[:, self.A].detach())
         else:
@@ -364,8 +364,8 @@ class mergeganmodel(BaseModel):
 
         # ReID loss ReID(anchor, G(A,B))
         if self.opt.mask_ReID:
-            real_a_embed = self.netReID(torch.where(self.mask_a>0, self.real_a, torch.zeros_like(self.real_a)))
-            fake_p_embed = self.netReID(torch.where(self.mask_G[:,self.A]>0, self.fake_G[:,self.A], torch.zeros_like(self.fake_G[:,self.A])))
+            real_a_embed = self.netReID(torch.where(self.mask_a >= .5, self.real_a, torch.zeros_like(self.real_a)))
+            fake_p_embed = self.netReID(torch.where(self.mask_G[:,self.A] >= .5, self.fake_G[:,self.A], torch.zeros_like(self.fake_G[:,self.A])))
         else:
             real_a_embed = self.netReID(self.real_a)
             fake_p_embed = self.netReID(self.fake_G[:,self.A])
