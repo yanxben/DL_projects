@@ -245,17 +245,18 @@ class Discriminator(nn.Module):
 
 
 class DiscriminatorReID(nn.Module):
-    def __init__(self, input_nc, last_conv_nc, input_size, depth, dropout=0.1):
+    def __init__(self, input_nc, last_conv_nc, input_size, depth, out_features=512, dropout=0.1):
         super(DiscriminatorReID, self).__init__()
         assert input_size // (2 ** depth) == input_size / (2 ** depth), 'Bad depth for input size'
         self.input_nc = input_nc
         self.last_conv_nc = last_conv_nc
         self.input_size = input_size
         self.feature_size = input_size // (2 ** depth)
+        self.out_features = out_features
 
         self.E = E1(input_nc, last_conv_nc, 0, self.input_size, depth, dropout=dropout)
         self.dropout = nn.Dropout2d(p=dropout)
-        self.linear1 = nn.Linear(last_conv_nc * self.feature_size * self.feature_size, 512)
+        self.linear1 = nn.Linear(last_conv_nc * self.feature_size * self.feature_size, out_features)
         self.sigmoid = nn.Sigmoid()
 
     def forward(self, x, use_activation=False):

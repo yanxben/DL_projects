@@ -20,6 +20,7 @@ See frequently asked questions at: https://github.com/junyanz/pytorch-CycleGAN-a
 """
 
 import os
+import socket
 import time
 import random
 
@@ -55,7 +56,7 @@ batch_size = 64
 imsize = 96
 depth = 5
 extract = [1, 3, depth]
-plot = True
+plot = False
 #mode = 'classification'
 model_mode = 're-identification'
 #mode = 'autoencoder'
@@ -65,7 +66,11 @@ data_mode = 'cropped'
 if __name__ == '__main__':
     t0 = time.time()
     #opt = TrainOptions().parse()   # get training options
-    _, caltech_data, caltech_meta, testset = create_dataset_caltech_ucsd('C:/Datasets/Caltech-UCSD-Birds-200', batch_size, imsize=imsize, mode=data_mode, testset=testset)  # create a dataset given opt.dataset_mode and other options
+    if socket.gethostname() == 'YABENN-P50':
+        caltech_path = 'C:/Datasets/Caltech-UCSD-Birds-200'
+    elif socket.gethostname() == 'ubuntu-1':
+        caltech_path = '/home/yanivbenny/Datasets/Caltech-UCSD-Birds-200'
+    _, caltech_data, caltech_meta, testset = create_dataset_caltech_ucsd(caltech_path, batch_size, imsize=imsize, mode=data_mode, testset=testset)  # create a dataset given opt.dataset_mode and other options
     #dataset_size = len(dataset)    # get the number of images in the dataset.
     #print('The number of training epochs = %d' % dataset_size)
     caltech_labels = caltech_meta['labels']
@@ -102,7 +107,7 @@ if __name__ == '__main__':
         criterion = nn.CrossEntropyLoss()
     if model_mode=='re-identification':
         caltech_data = caltech_data.type(torch.FloatTensor)
-        model = DiscriminatorReID(caltech_data.shape[1] - 1, 512, imsize, depth=depth)
+        model = DiscriminatorReID(caltech_data.shape[1] - 1, 512, imsize, depth=depth, out_features=64, dropout=0.)
         criterion = nn.TripletMarginLoss()
     if model_mode=='autoencoder':
         model = Generator(caltech_data.shape[1], 3, 512, 256, imsize, depth=depth, preprocess=False)
@@ -138,10 +143,10 @@ if __name__ == '__main__':
                 images_a, images_p, images_n = caltech_data[batch, :C-1], caltech_data[batch_p, :C-1], caltech_data[batch_n, :C-1]
 
                 # Preprocess
-                if data_mode == 'cropped':
-                    images = caltech_data[batch]
-                    images_p = caltech_data[batch_p]
-                    images_n = caltech_data[batch_n]
+                # if data_mode == 'cropped':
+                images_a = caltech_data[batch][:, :3]
+                images_p = caltech_data[batch_p][:, :3]
+                images_n = caltech_data[batch_n][:, :3]
                 if data_mode == 'range':
                     bboxes = [caltech_bboxes[b] for b in batch]
                     images_a = crop_data(images_a, bboxes, imsize)

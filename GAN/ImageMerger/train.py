@@ -66,8 +66,8 @@ if __name__ == '__main__':
     print('The number of training images = %d' % dataset_size)
 
     if opt.data_mode == 'range':
-        testset['images'] = crop_data(testset['images'][:4], testset['bboxes'], opt.input_size)
-        testlen = testset['images'].shape[0]
+        testset['images'] = crop_data(testset['images'], testset['bboxes'], opt.input_size)
+    testlen = testset['images'].shape[0]
 
     model_test_input = {'real_G': testset['images'][:, :3, :, :].reshape([-1, 2, 3, opt.input_size, opt.input_size]),
                         'mask_G': testset['images'][:, 3, :, :].unsqueeze(1).unsqueeze(1).reshape([-1, 2, 1, opt.input_size, opt.input_size]),
