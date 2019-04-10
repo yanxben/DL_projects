@@ -55,7 +55,8 @@ class mergeganmodel(BaseModel):
 
             parser.add_argument('--background', action='store_false', help='use background')
             parser.add_argument('--attention', action='store_true', help='use attention layer')
-            parser.add_argument('--ReID', action='store_false', help='use mask before ReID')
+            parser.add_argument('--Disc', action='store_false', help='use Disc')
+            parser.add_argument('--ReID', action='store_false', help='use ReID')
             parser.add_argument('--mask_ReID', action='store_true', help='use mask before ReID')
 
             parser.add_argument('--lambda_G1', type=float, default=0.5,
@@ -325,45 +326,49 @@ class mergeganmodel(BaseModel):
 
         # Disc
         # Real
-        pred_real = self.netDisc(self.real_D)
-        loss_D_real = self.criterionGAN(pred_real, True)
-        # Fake
-        fake_D = self.fake_G.reshape(-1, C, H, W)
-        pred_fake = self.netDisc(fake_D.detach())
-        loss_D_fake = self.criterionGAN(pred_fake, False)
-        # Combine loss and calculate gradients
-        self.loss_Disc = (loss_D_real + loss_D_fake) * 0.5
-        self.loss_Disc.backward()
+        if self.opt.Disc:
+            pred_real = self.netDisc(self.real_D)
+            loss_D_real = self.criterionGAN(pred_real, True)
+            # Fake
+            fake_D = self.fake_G.reshape(-1, C, H, W)
+            pred_fake = self.netDisc(fake_D.detach())
+            loss_D_fake = self.criterionGAN(pred_fake, False)
+            # Combine loss and calculate gradients
+            self.loss_Disc = (loss_D_real + loss_D_fake) * 0.5
+            self.loss_Disc.backward()
 
         # ReID
-
-        if self.opt.mask_ReID:
-            real_a_embed = self.netReID(torch.where(self.mask_a >= .5, self.real_a, torch.zeros_like(self.real_a)))
-            real_p_embed = self.netReID(torch.where(self.mask_G[:, self.B]>0, self.real_G[:, self.B], torch.zeros_like(self.real_G[:, self.B])))
-            #real_p_embed = self.netReID(self.real_G[:,self.B])
-            real_n_embed = self.netReID(torch.where(self.mask_n >= .5, self.real_n, torch.zeros_like(self.real_n)))
-            fake_p_embed = self.netReID(torch.where(self.mask_G[:, self.A]>0, self.fake_G[:, self.A].detach(), torch.zeros_like(self.fake_G[:, self.A])))
-            #fake_p_embed = self.netReID(self.fake_G[:, self.A].detach())
-        else:
-            real_a_embed = self.netReID(self.real_a)
-            real_p_embed = self.netReID(self.real_G[:, self.B])
-            real_n_embed = self.netReID(self.real_n)
-            fake_p_embed = self.netReID(self.fake_G[:, self.A].detach())
-        # real
-        loss_ReID_real = self.criterionReID1(real_a_embed, real_p_embed, real_n_embed)
-        # fake
-        loss_ReID_fake = self.criterionReID1(real_a_embed, real_p_embed, fake_p_embed)
-        # Combine loss and calculate gradients
-        self.loss_ReID = (loss_ReID_real + loss_ReID_fake) * 0.5
-        self.loss_ReID.backward()
+        if self.opt.ReID:
+            if self.opt.mask_ReID:
+                real_a_embed = self.netReID(torch.where(self.mask_a >= .5, self.real_a, torch.zeros_like(self.real_a)))
+                real_p_embed = self.netReID(torch.where(self.mask_G[:, self.B]>0, self.real_G[:, self.B], torch.zeros_like(self.real_G[:, self.B])))
+                #real_p_embed = self.netReID(self.real_G[:,self.B])
+                real_n_embed = self.netReID(torch.where(self.mask_n >= .5, self.real_n, torch.zeros_like(self.real_n)))
+                fake_p_embed = self.netReID(torch.where(self.mask_G[:, self.A]>0, self.fake_G[:, self.A].detach(), torch.zeros_like(self.fake_G[:, self.A])))
+                #fake_p_embed = self.netReID(self.fake_G[:, self.A].detach())
+            else:
+                real_a_embed = self.netReID(self.real_a)
+                real_p_embed = self.netReID(self.real_G[:, self.B])
+                real_n_embed = self.netReID(self.real_n)
+                fake_p_embed = self.netReID(self.fake_G[:, self.A].detach())
+            # real
+            loss_ReID_real = self.criterionReID1(real_a_embed, real_p_embed, real_n_embed)
+            # fake
+            loss_ReID_fake = self.criterionReID1(real_a_embed, real_p_embed, fake_p_embed)
+            # Combine loss and calculate gradients
+            self.loss_ReID = (loss_ReID_real + loss_ReID_fake) * 0.5
+            self.loss_ReID.backward()
 
     def backward_G(self, reid=True):
         """Calculate the loss for generator G"""
         _, _, C, H, W = self.fake_G.shape
 
         # GAN loss D(G(A,B))
-        fake_D = self.fake_G.reshape(-1, C, H, W)
-        self.loss_GDisc = self.criterionGAN(self.netDisc(fake_D), True)
+        if self.opt.Disc:
+            fake_D = self.fake_G.reshape(-1, C, H, W)
+            self.loss_GDisc = self.criterionGAN(self.netDisc(fake_D), True)
+        else:
+            self.loss_GDisc
 
         # ReID loss ReID(anchor, G(A,B))
         if self.opt.ReID and reid:
@@ -419,8 +424,10 @@ class mergeganmodel(BaseModel):
         self.optimizer_Disc.zero_grad()     # set D gradients to zero
         self.optimizer_ReID.zero_grad()     # set D gradients to zero
         self.backward_D()                   # calculate gradients for D
+        if self.opt.Disc:
         self.optimizer_Disc.step()          # update D weights
-        self.optimizer_ReID.step()          # update D weights
+        if self.opt.ReID:
+            self.optimizer_ReID.step()          # update D weights
 
     def runG(self, model_test_input=None):
         # Prepare data
