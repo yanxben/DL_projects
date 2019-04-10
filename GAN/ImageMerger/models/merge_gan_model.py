@@ -53,7 +53,7 @@ class mergeganmodel(BaseModel):
 
             parser.add_argument('--background', action='store_false', help='use background')
             parser.add_argument('--attention', action='store_true', help='use attention layer')
-            parser.add_argument('--mask_ReID', action='store_false', help='use mask before ReID')
+            parser.add_argument('--mask_ReID', action='store_true', help='use mask before ReID')
 
             parser.add_argument('--lambda_G1', type=float, default=0.5,
                                 help='weight for cycle loss (A -> B -> A)')
