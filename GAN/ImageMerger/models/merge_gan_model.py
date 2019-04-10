@@ -50,6 +50,7 @@ class mergeganmodel(BaseModel):
             parser.add_argument('--input_size', type=int, default=96, help='')
             parser.add_argument('--depth', type=int, default=5, help='')
             parser.add_argument('--last_conv_nc', type=int, default=512, help='')
+            parser.add_argument('--reid_features', type=int, default=64, help='')
 
             parser.add_argument('--background', action='store_false', help='use background')
             parser.add_argument('--attention', action='store_true', help='use attention layer')
@@ -114,7 +115,7 @@ class mergeganmodel(BaseModel):
         # Define Discriminators
         if self.isTrain:
             self.netDisc = encoder_decoder.Discriminator(opt.input_nc, opt.last_conv_nc, opt.input_size, opt.depth).to(self.device)
-            self.netReID = encoder_decoder.DiscriminatorReID(opt.input_nc, opt.last_conv_nc, opt.input_size, opt.depth).to(self.device)
+            self.netReID = encoder_decoder.DiscriminatorReID(opt.input_nc, opt.last_conv_nc, opt.input_size, opt.depth, out_features=opt.reid_features).to(self.device)
 
         if self.isTrain:
             # Define loss functions
