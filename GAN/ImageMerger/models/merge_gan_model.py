@@ -425,7 +425,7 @@ class mergeganmodel(BaseModel):
         self.optimizer_ReID.zero_grad()     # set D gradients to zero
         self.backward_D()                   # calculate gradients for D
         if self.opt.Disc:
-        self.optimizer_Disc.step()          # update D weights
+            self.optimizer_Disc.step()          # update D weights
         if self.opt.ReID:
             self.optimizer_ReID.step()          # update D weights
 
