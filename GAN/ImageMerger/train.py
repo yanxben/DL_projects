@@ -148,7 +148,7 @@ if __name__ == '__main__':
                            }
 
             model.set_input(model_input, 'mix' if i % 1 == 0 else 'reflection', load=True)  # unpack data from dataset and apply preprocessing
-            model.optimize_parameters()  # calculate loss functions, get gradients, update network weights
+            model.optimize_parameters(reid=i % opt.reid_freq == 0)  # calculate loss functions, get gradients, update network weights
 
             # plt.figure('intermediate')
             # #model.set_input(model_input, 'mix', load=True)
