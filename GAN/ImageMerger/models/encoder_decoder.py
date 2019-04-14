@@ -8,9 +8,14 @@ class EncoderBlock(nn.Module):
         self.full = nn.Sequential(
             nn.Conv2d(filters_in, filters_out, kernel, stride, padding),
             nn.InstanceNorm2d(filters_out),
-            nn.LeakyReLU(0.2, inplace=True) if activation=='lrelu' else nn.ReLU(inplace=True),
-            nn.Dropout2d(p=dropout)
         )
+        if activation is not None:
+            if activation == 'relu':
+                self.full.add_module('relu', nn.ReLU(inplace=True))
+            if activation == 'lrelu':
+                self.full.add_module('lrelu', nn.LeakyReLU(0.2, inplace=True))
+        if dropout > 0:
+            self.full.add_module('dropout', nn.Dropout2d(p=dropout))
 
     def forward(self, x):
         return self.full(x)
@@ -19,12 +24,22 @@ class EncoderBlock(nn.Module):
 class DecoderBlock(nn.Module):
     def __init__(self, filters_in, filters_out, kernel=4, stride=2, padding=1, activation='relu', dropout=0.):
         super(DecoderBlock, self).__init__()
-        self.full = nn.Sequential(
-            nn.Dropout2d(p=dropout),
-            nn.ConvTranspose2d(filters_in, filters_out, kernel, stride, padding),
-            nn.InstanceNorm2d(filters_out),
-            nn.LeakyReLU(0.2, inplace=True) if activation == 'lrelu' else nn.ReLU(inplace=True)
-        )
+        if dropout > 0:
+            self.full = nn.Sequential(
+                nn.Dropout2d(p=dropout),
+                nn.ConvTranspose2d(filters_in, filters_out, kernel, stride, padding),
+                nn.InstanceNorm2d(filters_out),
+            )
+        else:
+            self.full = nn.Sequential(
+                nn.ConvTranspose2d(filters_in, filters_out, kernel, stride, padding),
+                nn.InstanceNorm2d(filters_out),
+            )
+        if activation is not None:
+            if activation == 'relu':
+                self.full.add_module('relu', nn.ReLU(inplace=True))
+            if activation == 'lrelu':
+                self.full.add_module('lrelu', nn.LeakyReLU(0.2, inplace=True))
 
     def forward(self, x):
         return self.full(x)
@@ -101,7 +116,7 @@ class Decoder(nn.Module):
         self.blocks[str(depth-1)] = DecoderBlock(last_conv_nc, 32 * (2 ** min(4,depth-2)), activation=activation, dropout=dropout)
         for d in reversed(range(1, depth-1)):
             self.blocks[str(d)] = DecoderBlock(32 * (2 ** min(4,d)), 32 * (2 ** min(4,d-1)), activation=activation, dropout=dropout)
-        self.blocks[str(0)] = DecoderBlock(32, output_nc, activation=activation, dropout=dropout)
+        self.blocks[str(0)] = DecoderBlock(32, output_nc, activation=None, dropout=dropout)
 
         self.skip = nn.ModuleDict()
         self.skip[str(0)] = nn.Conv2d(2 * output_nc, output_nc, kernel_size=1)

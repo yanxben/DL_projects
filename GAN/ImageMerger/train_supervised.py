@@ -189,7 +189,7 @@ if __name__ == '__main__':
                 embed_a, embed_p, embed_n = model(images_a.cuda()), model(images_p.cuda()), model(images_n.cuda())
                 loss = criterion(embed_a, embed_p, embed_n)
             if model_mode == 'autoencoder':
-                yhat = model(images.cuda(), mask_in=mask.cuda(), mode=0, extract=extract, use_activation=False)
+                yhat = model(images.cuda(), mask_in=mask.cuda(), mode=0, extract=extract, use_activation=True)
                 loss = criterion(yhat, labels.cuda())
 
             # Run backward
