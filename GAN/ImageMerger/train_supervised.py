@@ -240,7 +240,7 @@ if __name__ == '__main__':
                     images[:, 0] = torch.where(mask[:, 0].unsqueeze(1).expand_as(images[:, 0]) > .5,
                                                torch.zeros_like(images[:, 0]), images[:, 0])
 
-                    yhat = model(images.cuda(), mask_in=mask.cuda(), mode=0, use_activation=False)
+                    yhat = model(images.cuda(), mask_in=mask.cuda(), mode=0, use_activation=True)
                     val_loss = criterion(yhat, labels.cuda())
 
                     # last_data_images = tensor2im(images)
