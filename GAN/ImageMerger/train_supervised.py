@@ -113,7 +113,7 @@ if __name__ == '__main__':
         model = DiscriminatorReID(caltech_data.shape[1] - 1, 256, imsize, depth=depth, out_features=32, dropout=0.1)
         criterion = nn.TripletMarginLoss()
     if model_mode=='autoencoder':
-        model = Generator(5, 3, 512, 256, imsize, depth=depth, preprocess=False)
+        model = Generator(5, 3, 512, 384, imsize, depth=depth, preprocess=False)
         criterion = nn.MSELoss()
 
     model.cuda()
@@ -179,7 +179,9 @@ if __name__ == '__main__':
                 mask = images[:, C-1, :, :].unsqueeze(1).expand([batch_size, 2, H, W])
                 images = images[:, :C-1, :, :].unsqueeze(1).expand([batch_size, 2, C-1, H, W])
                 images = im2tensor(images)
-                images[:,0] = torch.where(mask[:,0].unsqueeze(1).expand_as(images[:,0]) > .5, torch.zeros_like(images[:,0]), images[:,0])
+                # Particularly in this test we want to mask the object in image A to achieve recreation using deep features of image B
+                images[:,0] = torch.where(mask[:,0].unsqueeze(1).expand_as(images[:,0]) > .5,
+                                          torch.zeros_like(images[:,0]), images[:,0])
 
             # Zero the parameter gradients
             optimizer.zero_grad()
@@ -237,10 +239,11 @@ if __name__ == '__main__':
                     mask = caltech_data[validationset, C - 1, :, :].unsqueeze(1).expand([validationset.shape[0], 2, H, W])
                     images = caltech_data[validationset, :C - 1, :, :].unsqueeze(1).expand([validationset.shape[0], 2, C - 1, H, W])
                     images = im2tensor(images)
+                    # Mask image A in the same manner as is done in training
                     images[:, 0] = torch.where(mask[:, 0].unsqueeze(1).expand_as(images[:, 0]) > .5,
                                                torch.zeros_like(images[:, 0]), images[:, 0])
 
-                    yhat = model(images.cuda(), mask_in=mask.cuda(), mode=0, use_activation=True)
+                    yhat = model(images.cuda(), mask_in=mask.cuda(), mode=0, extract=extract, use_activation=True)
                     val_loss = criterion(yhat, labels.cuda())
 
                     # last_data_images = tensor2im(images)
