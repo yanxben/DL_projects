@@ -372,7 +372,7 @@ class mergeganmodel(BaseModel):
             fake_D = self.fake_G.reshape(-1, C, H, W)
             self.loss_GDisc = self.criterionGAN(self.netDisc(fake_D), True)
         else:
-            self.loss_GDisc
+            self.loss_GDisc = 0
 
         # ReID loss ReID(anchor, G(A,B))
         if self.opt.ReID and reid:
