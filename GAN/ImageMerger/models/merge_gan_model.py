@@ -53,11 +53,11 @@ class mergeganmodel(BaseModel):
             parser.add_argument('--reid_features', type=int, default=64, help='')
             parser.add_argument('--reid_freq', type=int, default=1, help='')
 
-            parser.add_argument('--background', action='store_false', help='use background')
-            parser.add_argument('--attention', action='store_true', help='use attention layer')
-            parser.add_argument('--Disc', action='store_false', help='use Disc')
-            parser.add_argument('--ReID', action='store_false', help='use ReID')
-            parser.add_argument('--mask_ReID', action='store_true', help='use mask before ReID')
+            parser.add_argument('--no_background', dest='background', action='store_false', help='use background')
+            parser.add_argument('--attention', dest='attention', action='store_true', help='use attention layer')
+            parser.add_argument('--no_Disc', dest='Disc', action='store_false', help='use Disc')
+            parser.add_argument('--no_ReID', dest='ReID', action='store_false', help='use ReID')
+            parser.add_argument('--mask_ReID', dest='mask_ReID', action='store_true', help='use mask before ReID')
 
             parser.add_argument('--lambda_G1', type=float, default=0.5,
                                 help='weight for cycle loss (A -> B -> A)')
@@ -70,7 +70,7 @@ class mergeganmodel(BaseModel):
             parser.add_argument('--lambda_ReID', type=float, default=0.05,
                                 help='lambda for ReID loss of Generator')
 
-            parser.add_argument('--preprocess_mask', action='store_false',
+            parser.add_argument('--no_preprocess', dest='preprocess_mask', action='store_false',
                                 help='use preprocessing on mask')
             parser.add_argument('--preprocess_flip', action='store_false',
                                 help='use preprocessing horizontal flip')
@@ -131,6 +131,10 @@ class mergeganmodel(BaseModel):
             self.optimizer_Gen = torch.optim.Adam(itertools.chain(self.netGen.parameters()), lr=opt.lr, betas=(opt.beta1, 0.999))
             self.optimizer_Disc = torch.optim.Adam(itertools.chain(self.netDisc.parameters()), lr=opt.lr, betas=(opt.beta1, 0.999))
             self.optimizer_ReID = torch.optim.Adam(itertools.chain(self.netReID.parameters()), lr=opt.lr, betas=(opt.beta1, 0.999))
+
+            if self.opt.load:
+                self.load_networks(self.opt.load_dir, self.opt.load_suffix)
+
             self.optimizers.append(self.optimizer_Gen)
             self.optimizers.append(self.optimizer_Disc)
             self.optimizers.append(self.optimizer_ReID)

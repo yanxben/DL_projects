@@ -188,8 +188,9 @@ if __name__ == '__main__':
         # cache our model every <save_epoch_freq> epochs
         if epoch % opt.save_epoch_freq == 0:
             print('saving the model at the end of epoch %d, iters %d' % (epoch, total_iters))
-            #save_suffix = 'epoch_%d' % epoch
-            #model.save_networks(save_suffix)
+            save_count = (save_count + 1) % 5
+            save_suffix = 'save_{}' .format(save_count)
+            model.save_networks(save_suffix)
 
             # Plot intermediate results
             plt.figure('test merge')
@@ -239,7 +240,10 @@ if __name__ == '__main__':
             # plt.savefig(os.path.join(opt.plots_dir, opt.name, 'reflection_epoch_%d.png' % epoch))
 
         print('End of epoch %d / %d \t Time Taken: %d sec' % (epoch, opt.niter + opt.niter_decay, time.time() - epoch_start_time))
-        model.update_learning_rate()                     # update learning rates at the end of every epoch.
+        #model.update_learning_rate()                     # update learning rates at the end of every epoch.
 
+    print('saving the model at the end of epoch %d, iters %d' % (epoch, total_iters))
+    save_suffix = 'save_{}_last'.format(save_count)
+    model.save_networks(save_suffix)
     print('DONE')
 

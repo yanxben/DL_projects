@@ -19,6 +19,7 @@ class BaseModel(ABC):
         """Initialize the BaseModel class.
 
         Parameters:
+        Parameters:
             opt (Option class)-- stores all the experiment flags; needs to be a subclass of BaseOptions
 
         When creating your custom class, you need to implement your own initialization.
@@ -136,7 +137,7 @@ class BaseModel(ABC):
                 errors_ret[name] = float(getattr(self, 'loss_' + name))  # float(...) works for both scalar tensor and float number
         return errors_ret
 
-    def save_networks(self, epoch):
+    def save_networks(self, save_suffix):
         """Save all the networks to the disk.
 
         Parameters:
@@ -144,7 +145,7 @@ class BaseModel(ABC):
         """
         for name in self.model_names:
             if isinstance(name, str):
-                save_filename = 'net_%s_%s.pth.tar' % (name, epoch)
+                save_filename = 'net_%s_%s.pth.tar' % (name, save_suffix)
                 save_path = os.path.join(self.save_dir, save_filename)
                 net = getattr(self, 'net' + name)
                 optimizer = getattr(self, 'optimizer_' + name)
@@ -170,7 +171,7 @@ class BaseModel(ABC):
         else:
             self.__patch_instance_norm_state_dict(state_dict, getattr(module, key), keys, i + 1)
 
-    def load_networks(self, epoch):
+    def load_networks(self, load_dir, load_suffix):
         """Load all the networks from the disk.
 
         Parameters:
@@ -178,22 +179,24 @@ class BaseModel(ABC):
         """
         for name in self.model_names:
             if isinstance(name, str):
-                load_filename = '%s_net_%s.pth' % (epoch, name)
-                load_path = os.path.join(self.save_dir, load_filename)
+                load_filename = 'net_%s_%s.pth.tar' % (name, load_suffix)
+                load_path = os.path.join(load_dir, load_filename)
                 net = getattr(self, 'net' + name)
-                if isinstance(net, torch.nn.DataParallel):
-                    net = net.module
-                print('loading the model from %s' % load_path)
+                optimizer = getattr(self, 'optimizer_' + name)
+                # if isinstance(net, torch.nn.DataParallel):
+                #     net = net.module
+                # print('loading the model from %s' % load_path)
                 # if you are using PyTorch newer than 0.4 (e.g., built from
                 # GitHub source), you can remove str() on self.device
-                state_dict = torch.load(load_path, map_location=str(self.device))
-                if hasattr(state_dict, '_metadata'):
-                    del state_dict._metadata
+                # state_dict = torch.load(load_path, map_location=str(self.device))
+                # if hasattr(state_dict, '_metadata'):
+                #     del state_dict._metadata
 
                 # patch InstanceNorm checkpoints prior to 0.4
-                for key in list(state_dict.keys()):  # need to copy keys here because we mutate in loop
-                    self.__patch_instance_norm_state_dict(state_dict, net, key.split('.'))
-                net.load_state_dict(state_dict)
+                # for key in list(state_dict.keys()):  # need to copy keys here because we mutate in loop
+                #     self.__patch_instance_norm_state_dict(state_dict, net, key.split('.'))
+                # net.load_state_dict(state_dict)
+                utils_save.load_model(net, load_path, optimizer, verbose=False)
 
     def print_networks(self, verbose):
         """Print the total number of parameters in the network and (if verbose) network architecture

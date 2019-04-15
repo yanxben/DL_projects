@@ -24,17 +24,11 @@ class EncoderBlock(nn.Module):
 class DecoderBlock(nn.Module):
     def __init__(self, filters_in, filters_out, kernel=4, stride=2, padding=1, activation='relu', dropout=0.):
         super(DecoderBlock, self).__init__()
+        self.full = nn.Sequential()
         if dropout > 0:
-            self.full = nn.Sequential(
-                nn.Dropout2d(p=dropout),
-                nn.ConvTranspose2d(filters_in, filters_out, kernel, stride, padding),
-                nn.InstanceNorm2d(filters_out),
-            )
-        else:
-            self.full = nn.Sequential(
-                nn.ConvTranspose2d(filters_in, filters_out, kernel, stride, padding),
-                nn.InstanceNorm2d(filters_out),
-            )
+            self.full.add_module('dropout', nn.Dropout2d(p=dropout))
+        self.full.add_module('conv2d', nn.ConvTranspose2d(filters_in, filters_out, kernel, stride, padding))
+        self.full.add_module('norm', nn.InstanceNorm2d(filters_out))
         if activation is not None:
             if activation == 'relu':
                 self.full.add_module('relu', nn.ReLU(inplace=True))

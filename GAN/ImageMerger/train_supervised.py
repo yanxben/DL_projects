@@ -122,6 +122,7 @@ if __name__ == '__main__':
     print('End of initialization. Time Taken: %d sec' % (time.time() - t0))
 
     total_iters = 0  # the total number of training iterations
+    plot_start_time = time.time()
     for epoch in range(1, epochs):    # outer loop for different epochs; we save the model by <epoch_count>, <epoch_count>+<save_latest_freq>
         epoch_start_time = time.time()  # timer for entire epoch
         epoch_iter = 0                  # the number of training iterations in current epoch, reset to 0 every epoch
@@ -279,7 +280,8 @@ if __name__ == '__main__':
             #print('saving the model at the end of epoch %d, iters %d' % (epoch, total_iters))
             #save_suffix = 'epoch_%d' % epoch
             #model.save_networks(save_suffix)
-            print('End of epoch %d / %d \t Time Taken: %d sec' % (epoch, epochs, time.time() - epoch_start_time))
+            print('End of epoch %d / %d \t Time Taken: %d sec' % (epoch, epochs, time.time() - plot_start_time))
+            plot_start_time = time.time()
 
     print('DONE')
 
