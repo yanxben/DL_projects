@@ -303,7 +303,7 @@ class mergeganmodel(BaseModel):
                     torch.cat((self.fake_G[:, self.A, :, :, :].unsqueeze(1), self.real_G[:, self.A, :, :, :].unsqueeze(1).flip(4)), dim=1),
                     mode=self.A)  # G(G(A))
                 self.rec_G_2B = self.netGen(
-                    torch.cat((self.real_G[:, self.B, :, :, :].unsqueeze(1), self.fake_G[:, self.B, :, :, :].unsqueeze(1).flip(4)), dim=1),
+                    torch.cat((self.real_G[:, self.B, :, :, :].unsqueeze(1).flip(4), self.fake_G[:, self.B, :, :, :].unsqueeze(1)), dim=1),
                     mode=self.B)  # G(G(A))
 
         # Use identity constraint for same image in both inputs
