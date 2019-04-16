@@ -3,7 +3,7 @@ import torch.nn as nn
 
 
 class EncoderBlock(nn.Module):
-    def __init__(self, filters_in, filters_out, kernel=4, stride=2, padding=1, activation='lrelu', dropout=0.):
+    def __init__(self, filters_in, filters_out, kernel=4, stride=2, padding=1, activation=None, dropout=0.):
         super(EncoderBlock, self).__init__()
         self.full = nn.Sequential(
             nn.Conv2d(filters_in, filters_out, kernel, stride, padding),
@@ -22,7 +22,7 @@ class EncoderBlock(nn.Module):
 
 
 class DecoderBlock(nn.Module):
-    def __init__(self, filters_in, filters_out, kernel=4, stride=2, padding=1, activation='relu', dropout=0.):
+    def __init__(self, filters_in, filters_out, kernel=4, stride=2, padding=1, activation=None, dropout=0.):
         super(DecoderBlock, self).__init__()
         self.full = nn.Sequential()
         if dropout > 0:
@@ -49,6 +49,7 @@ class E1(nn.Module):
         self.input_size = input_size
         self.feature_size = input_size // (2 ** depth)
         self.depth = depth
+        self.bottom_features = (self.last_conv_nc - self.sep) * self.feature_size * self.feature_size
 
         self.blocks = nn.ModuleDict()
         self.blocks[str(0)] = EncoderBlock(self.input_nc, 32, activation=activation, dropout=dropout)
@@ -62,7 +63,7 @@ class E1(nn.Module):
             x.append(self.blocks[str(d)](x[-1]))
             # print(x[-1].shape)
 
-        x[self.depth] = x[self.depth].view(-1, (self.last_conv_nc - self.sep) * self.feature_size * self.feature_size)
+        x[self.depth] = x[self.depth].view(-1, self.bottom_features)
         if extract is None:
             return x[self.depth]
         return [x[d] if d in extract else None for d in range(self.depth + 1)]
@@ -77,6 +78,7 @@ class E2(nn.Module):
         self.input_size = input_size
         self.feature_size = input_size // (2 ** depth)
         self.depth = depth
+        self.bottom_features = self.sep * self.feature_size * self.feature_size
 
         self.blocks = nn.ModuleDict()
         self.blocks[str(0)] = EncoderBlock(self.input_nc, 32, activation=activation, dropout=dropout)
@@ -90,7 +92,7 @@ class E2(nn.Module):
             x.append(self.blocks[str(d)](x[-1]))
             # print(x[-1].shape)
 
-        x[self.depth] = x[self.depth].view(-1, self.sep * self.feature_size * self.feature_size)
+        x[self.depth] = x[self.depth].view(-1, self.bottom_features)
         if extract is None:
             return x[self.depth]
         return [x[d] if d in extract else None for d in range(self.depth+1)]
@@ -105,6 +107,7 @@ class Decoder(nn.Module):
         self.input_size = input_size
         self.feature_size = input_size // (2 ** depth)
         self.depth = depth
+        self.bottom_features = self.last_conv_nc * self.feature_size * self.feature_size
 
         self.blocks = nn.ModuleDict()
         self.blocks[str(depth-1)] = DecoderBlock(last_conv_nc, 32 * (2 ** min(4,depth-2)), activation=activation, dropout=dropout)
@@ -138,19 +141,25 @@ class Decoder(nn.Module):
 
 
 class Generator(nn.Module):
-    def __init__(self, input_nc, output_nc, last_conv_nc, sep, input_size, depth, preprocess=False, extract=None):
+    def __init__(self, input_nc, output_nc, e1_conv_nc, e2_conv_nc, last_conv_nc, input_size, depth, preprocess=False, extract=None):
         super(Generator, self).__init__()
         self.input_nc = input_nc
         self.output_nc = output_nc
+        self.e1_conv_nc = e1_conv_nc
+        self.e2_conv_nc = e2_conv_nc
         self.last_conv_nc = last_conv_nc
-        self.sep = sep
+        self.sep = 0
         self.input_size = input_size
         self.preprocess = preprocess
         self.extract = extract
 
-        self.E_A = E1(self.input_nc, last_conv_nc, sep, input_size, depth)
-        self.E_B = E2(self.input_nc, sep, input_size, depth)
+        self.E_A = E1(self.input_nc, e1_conv_nc, 0, input_size, depth)
+        self.E_B = E2(self.input_nc, e2_conv_nc, input_size, depth)
         self.Decoder = Decoder(output_nc, last_conv_nc, input_size, depth)
+        self.Merger = nn.Sequential(
+            nn.Linear(self.E_A.bottom_features + self.E_B.bottom_features, self.Decoder.bottom_features),
+            nn.ReLU(inplace=True)
+        )
 
     def forward(self, x, mask_in, mode=None, extract=None, use_activation=True):
         N, B, C, H, W = x.shape
@@ -181,12 +190,14 @@ class Generator(nn.Module):
             #print(e_x2_B.shape)
             if extract is None:
                 z1 = torch.cat((e_x1_A, e_x2_B), dim=1)
+                z1 =self.Merger(z1)
             else:
                 z1 = e_x1_A
                 # print('before z')
                 # print(e_x1_A[-1].shape)
                 # print(e_x2_B.shape)
                 z1[-1] = torch.cat((e_x1_A[-1], e_x2_B), dim=1)
+                z1[-1] = self.Merger(z1[-1])
                 # print('after z')
             # print('decoding')
             y1 = self.Decoder(z1, use_activation=use_activation)
@@ -198,9 +209,11 @@ class Generator(nn.Module):
             e_x1_B = self.E_B(x1_B, extract=None)
             if extract is None:
                 z2 = torch.cat((e_x2_A, e_x1_B), dim=1)
+                z2 = self.Merger(z2)
             else:
                 z2 = e_x2_A
                 z2[-1] = torch.cat((e_x2_A[-1], e_x1_B), dim=1)
+                z2[-1] = self.Merger(z2[-1])
             y2 = self.Decoder(z2, use_activation=use_activation)
 
         if mode is None:

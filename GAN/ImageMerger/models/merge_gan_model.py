@@ -46,10 +46,11 @@ class mergeganmodel(BaseModel):
         """
         parser.set_defaults(no_dropout=True)  # default CycleGAN did not use dropout
         if is_train:
-            parser.add_argument('--sep', type=int, default=128, help='')
+            parser.add_argument('--last_conv_nc', type=int, default=512, help='')
+            parser.add_argument('--e1_conv_nc', type=int, default=512, help='')
+            parser.add_argument('--e2_conv_nc', type=int, default=512, help='')
             parser.add_argument('--input_size', type=int, default=96, help='')
             parser.add_argument('--depth', type=int, default=5, help='')
-            parser.add_argument('--last_conv_nc', type=int, default=512, help='')
             parser.add_argument('--reid_features', type=int, default=64, help='')
             parser.add_argument('--reid_freq', type=int, default=1, help='')
 
@@ -114,7 +115,7 @@ class mergeganmodel(BaseModel):
         self.B = 1
 
         # Define Generator
-        self.netGen = encoder_decoder.Generator(opt.input_nc + (2 if opt.background else 0), opt.input_nc, opt.last_conv_nc, opt.sep, opt.input_size, opt.depth, extract=[2, 4, opt.depth]).to(self.device)
+        self.netGen = encoder_decoder.Generator(opt.input_nc + (2 if opt.background else 0), opt.input_nc, opt.e1_conv_nc, opt.e2_conv_nc, opt.last_conv_nc, opt.input_size, opt.depth, extract=[2, 4, opt.depth]).to(self.device)
         # Define Discriminators
         if self.isTrain:
             self.netDisc = encoder_decoder.Discriminator(opt.input_nc, opt.last_conv_nc, opt.input_size, opt.depth).to(self.device)
@@ -164,12 +165,12 @@ class mergeganmodel(BaseModel):
         if self.opt.background:
             if not self.opt.attention:
                 self.mask_G = model_input['mask_G'].clone()
-                self.mask_D = model_input['mask_D'].clone()
                 self.mask_G = self.mask_G.expand_as(self.real_G)
+                self.mask_D = model_input['mask_D'].clone()
                 self.mask_D = self.mask_D.expand_as(self.real_D)
                 self.mask_a = model_input['mask_a'].clone()  # anchor images for ReID
-                self.mask_n = model_input['mask_n'].clone()  # negative images for ReID
                 self.mask_a = self.mask_a.expand_as(self.real_a)
+                self.mask_n = model_input['mask_n'].clone()  # negative images for ReID
                 self.mask_n = self.mask_n.expand_as(self.real_n)
 
         self.input_mode = input_mode
@@ -236,8 +237,8 @@ class mergeganmodel(BaseModel):
             self.real_n = torch.where(flip == 1, self.real_n.flip(3), self.real_n)
             self.mask_n = torch.where(flip == 1, self.mask_n.flip(3), self.mask_n)
 
-        # 2. Shift
-        # 3. Rotate
+        # 2. Shift - is done outside of model (before input)
+        # 3. Rotate - unused, will also be done outside of model
 
         self.mask_G = torch.where(self.mask_G >= 0.5, torch.ones_like(self.mask_G), torch.zeros_like(self.mask_G))
         self.mask_D = torch.where(self.mask_D >= 0.5, torch.ones_like(self.mask_D), torch.zeros_like(self.mask_D))
@@ -299,10 +300,10 @@ class mergeganmodel(BaseModel):
                     mask_in=self.mask_G[:, self.B, :, :, :], mode=self.B)  # G(G(A))
             else:
                 self.rec_G_2A = self.netGen(
-                    torch.cat((self.fake_G[:, self.A, :, :, :].unsqueeze(1), self.real_G[:, self.A, :, :, :].unsqueeze(1)), dim=1),
+                    torch.cat((self.fake_G[:, self.A, :, :, :].unsqueeze(1), self.real_G[:, self.A, :, :, :].unsqueeze(1).flip(4)), dim=1),
                     mode=self.A)  # G(G(A))
                 self.rec_G_2B = self.netGen(
-                    torch.cat((self.real_G[:, self.B, :, :, :].unsqueeze(1), self.fake_G[:, self.B, :, :, :].unsqueeze(1)), dim=1),
+                    torch.cat((self.real_G[:, self.B, :, :, :].unsqueeze(1), self.fake_G[:, self.B, :, :, :].unsqueeze(1).flip(4)), dim=1),
                     mode=self.B)  # G(G(A))
 
         # Use identity constraint for same image in both inputs
