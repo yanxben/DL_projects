@@ -68,7 +68,9 @@ class mergeganmodel(BaseModel):
                                 help='use background mapping. Setting lambda_identity other than 0 has an effect of scaling the weight of the identity mapping loss. For example, if the weight of the identity loss should be 10 times smaller than the weight of the reconstruction loss, please set lambda_identity = 0.1')
             parser.add_argument('--lambda_Identity', type=float, default=0.05,
                                 help='use identity mapping. Setting lambda_identity other than 0 has an effect of scaling the weight of the identity mapping loss. For example, if the weight of the identity loss should be 10 times smaller than the weight of the reconstruction loss, please set lambda_identity = 0.1')
-            parser.add_argument('--lambda_ReID', type=float, default=0.05,
+            parser.add_argument('--lambda_Disc', type=float, default=0.5,
+                                help='lambda for Disc loss of Generator')
+            parser.add_argument('--lambda_ReID', type=float, default=0.5,
                                 help='lambda for ReID loss of Generator')
 
             parser.add_argument('--no_preprocess', dest='preprocess_mask', action='store_false',
@@ -129,9 +131,9 @@ class mergeganmodel(BaseModel):
             self.criterionBackground = torch.nn.L1Loss()
             self.criterionCycle = torch.nn.L1Loss()
             # Initialize optimizers; schedulers will be automatically created by function <BaseModel.setup>.
-            self.optimizer_Gen = torch.optim.Adam(itertools.chain(self.netGen.parameters()), lr=opt.lr, betas=(opt.beta1, 0.999))
-            self.optimizer_Disc = torch.optim.Adam(itertools.chain(self.netDisc.parameters()), lr=opt.lr, betas=(opt.beta1, 0.999))
-            self.optimizer_ReID = torch.optim.Adam(itertools.chain(self.netReID.parameters()), lr=opt.lr, betas=(opt.beta1, 0.999))
+            self.optimizer_Gen = torch.optim.Adam(itertools.chain(self.netGen.parameters()), lr=opt.lr, weight_decay=1e-5, betas=(opt.beta1, 0.999))
+            self.optimizer_Disc = torch.optim.Adam(itertools.chain(self.netDisc.parameters()), lr=opt.lr, weight_decay=1e-5, betas=(opt.beta1, 0.999))
+            self.optimizer_ReID = torch.optim.Adam(itertools.chain(self.netReID.parameters()), lr=opt.lr, weight_decay=1e-5, betas=(opt.beta1, 0.999))
 
             if self.opt.load:
                 self.load_networks(self.opt.load_dir, self.opt.load_suffix)
@@ -371,7 +373,7 @@ class mergeganmodel(BaseModel):
         # GAN loss D(G(A,B))
         if self.opt.Disc:
             fake_D = self.fake_G.reshape(-1, C, H, W)
-            self.loss_GDisc = self.criterionGAN(self.netDisc(fake_D), True)
+            self.loss_GDisc = self.criterionGAN(self.netDisc(fake_D), True) * self.opt.lambda_Disc
         else:
             self.loss_GDisc = 0
 
@@ -403,15 +405,15 @@ class mergeganmodel(BaseModel):
             self.loss_cycle_2B = self.criterionCycle(self.rec_G_2B, self.real_G[:, self.B, :, :, :]) * self.opt.lambda_G2
 
         # Identity
-        if self.input_mode == 'reflection':
-            if self.opt.lambda_Identity > 0:
-                self.loss_identity = self.criterionCycle(self.real_G_ref, self.fake_G) * self.opt.lambda_Identity
+        # if self.input_mode == 'reflection':
+        #     if self.opt.lambda_Identity > 0:
+        #         self.loss_identity = self.criterionCycle(self.real_G_ref, self.fake_G) * self.opt.lambda_Identity
 
         # combined loss and calculate gradients
         if self.input_mode == 'mix':
             self.loss_G = self.loss_GDisc + self.loss_GReID + self.loss_G_background + self.loss_cycle_1 + self.loss_cycle_2A + self.loss_cycle_2B
-        elif self.input_mode == 'reflection':
-            self.loss_G = self.loss_GDisc + self.loss_GReID + self.loss_G_background + self.loss_identity
+        # elif self.input_mode == 'reflection':
+        #     self.loss_G = self.loss_GDisc + self.loss_GReID + self.loss_G_background + self.loss_identity
         self.loss_G.backward()
 
     def optimize_parameters(self, reid=True):
