@@ -54,7 +54,7 @@ if __name__ == '__main__':
     if socket.gethostname() == 'YABENN-P50':
         caltech_path = 'C:/Datasets/Caltech-UCSD-Birds-200'
     elif socket.gethostname() == 'ubuntu-1':
-        caltech_path = '/home/yanivbenny/Datasets/Caltech-UCSD-Birds-200'
+        caltech_path = '/home/' + os.getlogin() + '/Datasets/Caltech-UCSD-Birds-200'
     _, caltech_data, caltech_meta, testset = create_dataset_caltech_ucsd(caltech_path, opt.batch_size, size=opt.data_size ,mode=opt.data_mode, imsize=opt.input_size, testset=testset)  # create a dataset given opt.dataset_mode and other options
 
     caltech_labels = caltech_meta['labels']
