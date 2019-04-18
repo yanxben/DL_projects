@@ -72,7 +72,7 @@ if __name__ == '__main__':
         caltech_path = 'C:/Datasets/Caltech-UCSD-Birds-200'
     elif socket.gethostname() == 'ubuntu-1':
         plot = False
-        caltech_path = '/home/yanivbenny/Datasets/Caltech-UCSD-Birds-200'
+        caltech_path = '/home/' + os.getlogin() + '/Datasets/Caltech-UCSD-Birds-200'
     _, caltech_data, caltech_meta, testset = create_dataset_caltech_ucsd(caltech_path, batch_size, imsize=imsize, mode=data_mode, testset=testset)  # create a dataset given opt.dataset_mode and other options
     #dataset_size = len(dataset)    # get the number of images in the dataset.
     #print('The number of training epochs = %d' % dataset_size)
