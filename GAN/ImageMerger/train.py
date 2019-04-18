@@ -53,7 +53,7 @@ if __name__ == '__main__':
     #dataset, stl10_data = create_dataset_stl10_bird(opt)  # create a dataset given opt.dataset_mode and other options
     if socket.gethostname() == 'YABENN-P50':
         caltech_path = 'C:/Datasets/Caltech-UCSD-Birds-200'
-    elif socket.gethostname() == 'ubuntu-1':
+    elif os.sys.platform == 'linux':
         caltech_path = '/home/' + os.getlogin() + '/Datasets/Caltech-UCSD-Birds-200'
     _, caltech_data, caltech_meta, testset = create_dataset_caltech_ucsd(caltech_path, opt.batch_size, size=opt.data_size ,mode=opt.data_mode, imsize=opt.input_size, testset=testset)  # create a dataset given opt.dataset_mode and other options
 

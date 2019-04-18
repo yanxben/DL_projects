@@ -70,7 +70,7 @@ if __name__ == '__main__':
     if socket.gethostname() == 'YABENN-P50':
         plot = True
         caltech_path = 'C:/Datasets/Caltech-UCSD-Birds-200'
-    elif socket.gethostname() == 'ubuntu-1':
+    elif os.sys.platform == 'linux':
         plot = False
         caltech_path = '/home/' + os.getlogin() + '/Datasets/Caltech-UCSD-Birds-200'
     _, caltech_data, caltech_meta, testset = create_dataset_caltech_ucsd(caltech_path, batch_size, imsize=imsize, mode=data_mode, testset=testset)  # create a dataset given opt.dataset_mode and other options
