@@ -46,6 +46,7 @@ class mergeganmodel(BaseModel):
         """
         parser.set_defaults(no_dropout=True)  # default CycleGAN did not use dropout
         if is_train:
+            parser.add_argument('--model_config', type=str, default='light', help='type of model light/heavy')
             parser.add_argument('--last_conv_nc', type=int, default=512, help='')
             parser.add_argument('--e1_conv_nc', type=int, default=512, help='')
             parser.add_argument('--e2_conv_nc', type=int, default=512, help='')
@@ -117,7 +118,14 @@ class mergeganmodel(BaseModel):
         self.B = 1
 
         # Define Generator
-        self.netGen = encoder_decoder.Generator(opt.input_nc + (2 if opt.background else 0), opt.input_nc, opt.e1_conv_nc, opt.e2_conv_nc, opt.last_conv_nc, opt.input_size, opt.depth, extract=[2, 4, opt.depth]).to(self.device)
+        if self.opt.model_config == 'light':
+            self.netGen = encoder_decoder.Generator(opt.input_nc + (2 if opt.background else 0), opt.input_nc,
+                                                    opt.e1_conv_nc, opt.e2_conv_nc, opt.last_conv_nc, opt.input_size,
+                                                    opt.depth, extract=[1, 3, opt.depth]).to(self.device)
+        elif self.opt.model_config == 'heavy':
+            self.netGen = encoder_decoder.GeneratorHeavy(opt.input_nc + (2 if opt.background else 0), opt.input_nc,
+                                                    opt.e1_conv_nc, opt.e2_conv_nc, opt.last_conv_nc, opt.input_size,
+                                                    opt.depth, extract=[1, 3, opt.depth]).to(self.device)
         # Define Discriminators
         if self.isTrain:
             self.netDisc = encoder_decoder.Discriminator(opt.input_nc, opt.last_conv_nc, opt.input_size, opt.depth).to(self.device)
@@ -318,7 +326,7 @@ class mergeganmodel(BaseModel):
         #             mode=self.A
         #         )
 
-    def backward_D(self):
+    def optimize_D(self):
         """Calculate GAN loss for the discriminator
 
         Parameters:
@@ -329,6 +337,9 @@ class mergeganmodel(BaseModel):
         Return the discriminator loss.
         We also call loss_D.backward() to calculate the gradients.
         """
+        self.optimizer_Disc.zero_grad()     # set D gradients to zero
+        self.optimizer_ReID.zero_grad()     # set D gradients to zero
+
         _, _, C, H, W = self.fake_G.shape
 
         # Disc
@@ -348,10 +359,10 @@ class mergeganmodel(BaseModel):
         if self.opt.ReID:
             if self.opt.mask_ReID:
                 real_a_embed = self.netReID(torch.where(self.mask_a >= .5, self.real_a, torch.zeros_like(self.real_a)))
-                real_p_embed = self.netReID(torch.where(self.mask_G[:, self.B]>0, self.real_G[:, self.B], torch.zeros_like(self.real_G[:, self.B])))
+                real_p_embed = self.netReID(torch.where(self.mask_G[:, self.B] >= .5, self.real_G[:, self.B], torch.zeros_like(self.real_G[:, self.B])))
                 #real_p_embed = self.netReID(self.real_G[:,self.B])
                 real_n_embed = self.netReID(torch.where(self.mask_n >= .5, self.real_n, torch.zeros_like(self.real_n)))
-                fake_p_embed = self.netReID(torch.where(self.mask_G[:, self.A]>0, self.fake_G[:, self.A].detach(), torch.zeros_like(self.fake_G[:, self.A])))
+                fake_p_embed = self.netReID(torch.where(self.mask_G[:, self.A] >= .5, self.fake_G[:, self.A].detach(), torch.zeros_like(self.fake_G[:, self.A])))
                 #fake_p_embed = self.netReID(self.fake_G[:, self.A].detach())
             else:
                 real_a_embed = self.netReID(self.real_a)
@@ -366,9 +377,16 @@ class mergeganmodel(BaseModel):
             self.loss_ReID = (loss_ReID_real + loss_ReID_fake) * 0.5
             self.loss_ReID.backward()
 
-    def backward_G(self, reid=True):
+        # Update weights
+        if self.opt.Disc:
+            self.optimizer_Disc.step()      # update Disc weights
+        if self.opt.ReID:
+            self.optimizer_ReID.step()      # update ReID weights
+
+    def optimize_G(self, reid=True):
         """Calculate the loss for generator G"""
         _, _, C, H, W = self.fake_G.shape
+        self.optimizer_Gen.zero_grad()      # set G gradients to zero
 
         # GAN loss D(G(A,B))
         if self.opt.Disc:
@@ -415,6 +433,7 @@ class mergeganmodel(BaseModel):
         # elif self.input_mode == 'reflection':
         #     self.loss_G = self.loss_GDisc + self.loss_GReID + self.loss_G_background + self.loss_identity
         self.loss_G.backward()
+        self.optimizer_Gen.step()  # update G weights
 
     def optimize_parameters(self, reid=True):
         """Calculate losses, gradients, and update network weights; called in every training iteration"""
@@ -423,18 +442,10 @@ class mergeganmodel(BaseModel):
         self.forward()      # compute fake images and reconstruction images.
         # G
         self.set_requires_grad([self.netDisc, self.netReID], False)  # D require no gradients when optimizing G
-        self.optimizer_Gen.zero_grad()      # set G gradients to zero
-        self.backward_G(reid)                   # calculate gradients for G
-        self.optimizer_Gen.step()           # update G weights
+        self.optimize_G(reid)
         # D
         self.set_requires_grad([self.netDisc, self.netReID], True)
-        self.optimizer_Disc.zero_grad()     # set D gradients to zero
-        self.optimizer_ReID.zero_grad()     # set D gradients to zero
-        self.backward_D()                   # calculate gradients for D
-        if self.opt.Disc:
-            self.optimizer_Disc.step()          # update D weights
-        if self.opt.ReID:
-            self.optimizer_ReID.step()          # update D weights
+        self.optimize_D()
 
     def runG(self, model_test_input=None):
         # Prepare data
