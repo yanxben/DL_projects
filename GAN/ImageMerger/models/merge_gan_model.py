@@ -410,8 +410,7 @@ class mergeganmodel(BaseModel):
             loss_GD = self.loss_GDisc + self.loss_GReID
             self.optimizer_Gen.zero_grad()  # set G gradients to zero
             loss_GD.backward(retain_graph=True)
-            for p in iter(self.netGen.parameters()):
-                p.grad.clamp(-1, 1)
+            torch.nn.utils.clip_grad_value_(self.netGen.parameters(), 1)
             self.optimizer_Gen.step()
 
         # GAN Background loss
