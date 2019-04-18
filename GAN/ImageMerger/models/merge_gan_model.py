@@ -386,7 +386,6 @@ class mergeganmodel(BaseModel):
     def optimize_G(self, reid=True):
         """Calculate the loss for generator G"""
         _, _, C, H, W = self.fake_G.shape
-        self.optimizer_Gen.zero_grad()      # set G gradients to zero
 
         # GAN loss D(G(A,B))
         if self.opt.Disc:
@@ -406,6 +405,14 @@ class mergeganmodel(BaseModel):
             self.loss_GReID = torch.mean(self.criterionReID2(real_a_embed, fake_p_embed)) * self.opt.lambda_ReID
         else:
             self.loss_GReID = 0
+
+        if self.opt.Disc or (self.opt.ReID and reid):
+            loss_GD = self.loss_GDisc + self.loss_GReID
+            self.optimizer_Gen.zero_grad()  # set G gradients to zero
+            loss_GD.backward(retain_graph=True)
+            for p in iter(self.netGen.parameters()):
+                p.grad.clamp(-1, 1)
+            self.optimizer_Gen.step()
 
         # GAN Background loss
         if self.opt.background:
@@ -432,6 +439,7 @@ class mergeganmodel(BaseModel):
             self.loss_G = self.loss_GDisc + self.loss_GReID + self.loss_G_background + self.loss_cycle_1 + self.loss_cycle_2A + self.loss_cycle_2B
         # elif self.input_mode == 'reflection':
         #     self.loss_G = self.loss_GDisc + self.loss_GReID + self.loss_G_background + self.loss_identity
+        self.optimizer_Gen.zero_grad()  # set G gradients to zero
         self.loss_G.backward()
         self.optimizer_Gen.step()  # update G weights
 
