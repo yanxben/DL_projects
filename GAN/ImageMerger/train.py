@@ -91,6 +91,8 @@ if __name__ == '__main__':
         plt.subplot(testlen//2, 6, i * 6 + 4)
         plt.subplot(testlen//2, 6, i * 6 + 5)
         plt.subplot(testlen//2, 6, i * 6 + 6)
+    if not os.path.isdir(opt.plots_dir):
+        os.mkdir(opt.plots_dir)
     if not os.path.isdir(os.path.join(opt.plots_dir, opt.name)):
         os.mkdir(os.path.join(opt.plots_dir, opt.name))
 
