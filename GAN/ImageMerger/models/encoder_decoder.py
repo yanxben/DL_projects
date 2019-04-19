@@ -216,11 +216,11 @@ class DecoderHeavy(nn.Module):
             nn.ReflectionPad2d(1),
             EncoderBlock(32, 32, kernel=3, stride=1, padding=0, activation=activation, dropout=dropout),
             #nn.ReflectionPad2d(1),
-            DecoderBlock(32, 32, kernel=4, stride=2, padding=1, activation=None, dropout=dropout),
+            DecoderBlock(32, 32, kernel=4, stride=2, padding=1, activation=activation, dropout=dropout),
             nn.ReflectionPad2d(1),
             EncoderBlock(32, 32, kernel=3, stride=1, padding=0, activation=activation, dropout=dropout),
             nn.ReflectionPad2d(1),
-            EncoderBlock(32, output_nc, kernel=3, stride=1, padding=0, activation=activation, dropout=dropout)
+            EncoderBlock(32, output_nc, kernel=3, stride=1, padding=0, activation=None, dropout=dropout)
         )
 
         self.skip = nn.ModuleDict()
