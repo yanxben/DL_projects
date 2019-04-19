@@ -31,7 +31,7 @@ import torch
 from torch import optim
 from torch import nn
 
-from models.encoder_decoder import DiscriminatorReID, DiscriminatorTriplet, Classifier200, Generator, AutoEncoder2
+from models.encoder_decoder import DiscriminatorReID, DiscriminatorTriplet, Classifier200, Generator, GeneratorHeavy, AutoEncoder2
 from options.train_options import TrainOptions
 from data.data_caltech_ucsd import create_dataset_caltech_ucsd, crop_data
 from models import create_model
@@ -52,7 +52,7 @@ testset = ['Red_winged_Blackbird_0017_583846699', 'Yellow_headed_Blackbird_0009_
      'Gray_Catbird_0031_148467783', 'Purple_Finch_0006_2329434675', 'American_Goldfinch_0004_155617438',
      'Blue_Grosbeak_0008_2450854752', 'Green_Kingfisher_0002_228927324', 'Pied_Kingfisher_0002_1020026028']
 testlen = len(testset)
-batch_size = 64
+batch_size = 16
 imsize = 96
 depth = 5
 extract = [1, 3, depth]
@@ -113,7 +113,7 @@ if __name__ == '__main__':
         model = DiscriminatorReID(caltech_data.shape[1] - 1, 256, imsize, depth=depth, out_features=32, dropout=0.1)
         criterion = nn.TripletMarginLoss()
     if model_mode=='autoencoder':
-        model = Generator(5, 3, 512, 384, imsize, depth=depth, preprocess=False)
+        model = GeneratorHeavy(5, 3, 512, 512, 512, imsize, depth=depth, preprocess=False, extract=extract)
         criterion = nn.MSELoss()
 
     model.cuda()
