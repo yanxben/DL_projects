@@ -50,6 +50,10 @@ testset = ['Red_winged_Blackbird_0017_583846699', 'Yellow_headed_Blackbird_0009_
 if __name__ == '__main__':
     t0 = time.time()
     opt = TrainOptions().parse()   # get training options
+
+    model = create_model(opt)      # create a model given opt.model and other options
+    model.setup(opt)               # regular setup: load and print networks; create schedulers
+
     #dataset, stl10_data = create_dataset_stl10_bird(opt)  # create a dataset given opt.dataset_mode and other options
     if socket.gethostname() == 'YABENN-P50':
         caltech_path = 'C:/Datasets/Caltech-UCSD-Birds-200'
@@ -96,8 +100,6 @@ if __name__ == '__main__':
     if not os.path.isdir(os.path.join(opt.plots_dir, opt.name)):
         os.mkdir(os.path.join(opt.plots_dir, opt.name))
 
-    model = create_model(opt)      # create a model given opt.model and other options
-    model.setup(opt)               # regular setup: load and print networks; create schedulers
     #visualizer = Visualizer(opt)   # create a visualizer that display/save images and plots
     total_iters = 0                # the total number of training iterations
     save_count = 0
@@ -189,7 +191,7 @@ if __name__ == '__main__':
 
         # cache our model every <save_epoch_freq> epochs
         if epoch % opt.save_epoch_freq == 0:
-            print('saving the model at the end of epoch %d, iters %d' % (epoch, total_iters))
+            print('{} - saving the model at the end of epoch {}, iters {}'.format(opt.name, epoch, total_iters))
             save_count = (save_count + 1) % 5
             save_suffix = 'save_{}' .format(save_count)
             model.save_networks(save_suffix)
@@ -241,7 +243,7 @@ if __name__ == '__main__':
             # #plt.pause(0.01)
             # plt.savefig(os.path.join(opt.plots_dir, opt.name, 'reflection_epoch_%d.png' % epoch))
 
-        print('End of epoch %d / %d \t Time Taken: %d sec' % (epoch, opt.niter + opt.niter_decay, time.time() - epoch_start_time))
+        print('End of epoch {} / {} \t Time Taken: {:d} sec'.format(epoch, opt.epochs, time.time() - epoch_start_time))
         #model.update_learning_rate()                     # update learning rates at the end of every epoch.
 
     print('saving the model at the end of epoch %d, iters %d' % (epoch, total_iters))
