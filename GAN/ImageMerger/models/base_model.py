@@ -82,11 +82,11 @@ class BaseModel(ABC):
         Parameters:
             opt (Option class) -- stores all the experiment flags; needs to be a subclass of BaseOptions
         """
-        if self.isTrain:
-            self.schedulers = [networks.get_scheduler(optimizer, opt) for optimizer in self.optimizers]
-        if not self.isTrain or opt.continue_train:
-            load_suffix = 'iter_%d' % opt.load_iter if opt.load_iter > 0 else opt.epoch
-            self.load_networks(load_suffix)
+        #if self.isTrain:
+        #    self.schedulers = [networks.get_scheduler(optimizer, opt) for optimizer in self.optimizers]
+        #if not self.isTrain or opt.continue_train:
+        #    load_suffix = 'iter_%d' % opt.load_iter if opt.load_iter > 0 else opt.epoch
+        #    self.load_networks(load_suffix)
         self.print_networks(opt.verbose)
 
     def eval(self):
@@ -182,7 +182,7 @@ class BaseModel(ABC):
                 load_filename = 'net_%s_%s.pth.tar' % (name, load_suffix)
                 load_path = os.path.join(load_dir, load_filename)
                 net = getattr(self, 'net' + name)
-                optimizer = getattr(self, 'optimizer_' + name)
+                optimizer = getattr(self, 'optimizer_' + name) if self.opt.isTrain else None
                 # if isinstance(net, torch.nn.DataParallel):
                 #     net = net.module
                 # print('loading the model from %s' % load_path)

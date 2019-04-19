@@ -142,13 +142,12 @@ class mergeganmodel(BaseModel):
             self.optimizer_Gen = torch.optim.Adam(itertools.chain(self.netGen.parameters()), lr=opt.lr, weight_decay=1e-5, betas=(opt.beta1, 0.999))
             self.optimizer_Disc = torch.optim.Adam(itertools.chain(self.netDisc.parameters()), lr=opt.lr, weight_decay=1e-5, betas=(opt.beta1, 0.999))
             self.optimizer_ReID = torch.optim.Adam(itertools.chain(self.netReID.parameters()), lr=opt.lr, weight_decay=1e-5, betas=(opt.beta1, 0.999))
-
-            if self.opt.load:
-                self.load_networks(self.opt.load_dir, self.opt.load_suffix)
-
             self.optimizers.append(self.optimizer_Gen)
             self.optimizers.append(self.optimizer_Disc)
             self.optimizers.append(self.optimizer_ReID)
+
+        if self.opt.load:
+            self.load_networks(self.opt.load_dir, self.opt.load_suffix)
 
     def set_input(self, model_input, input_mode, load=False):
         """Unpack input data from the dataloader and perform necessary pre-processing steps.
