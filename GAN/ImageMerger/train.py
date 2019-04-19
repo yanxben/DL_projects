@@ -192,7 +192,7 @@ if __name__ == '__main__':
         # cache our model every <save_epoch_freq> epochs
         if epoch % opt.save_epoch_freq == 0:
             print('{} - saving the model at the end of epoch {}, iters {}'.format(opt.name, epoch, total_iters))
-            save_count = (save_count + 1) % 5
+            save_count = (save_count + 1) % 10
             save_suffix = 'save_{}' .format(save_count)
             model.save_networks(save_suffix)
 
