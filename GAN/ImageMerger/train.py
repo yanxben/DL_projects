@@ -192,7 +192,7 @@ if __name__ == '__main__':
         # cache our model every <save_epoch_freq> epochs
         if epoch % opt.save_epoch_freq == 0:
             print('{} - saving the model at the end of epoch {}, iters {}'.format(opt.name, epoch, total_iters))
-            save_count = (save_count + 1) % 5
+            save_count = (save_count + 1) % 10
             save_suffix = 'save_{}' .format(save_count)
             model.save_networks(save_suffix)
 
@@ -243,7 +243,7 @@ if __name__ == '__main__':
             # #plt.pause(0.01)
             # plt.savefig(os.path.join(opt.plots_dir, opt.name, 'reflection_epoch_%d.png' % epoch))
 
-        print('End of epoch {} / {} \t Time Taken: {:d} sec'.format(epoch, opt.epochs, time.time() - epoch_start_time))
+        print('End of epoch {} / {} \t Time Taken: {:d} sec'.format(epoch, opt.epochs, int(time.time() - epoch_start_time)))
         #model.update_learning_rate()                     # update learning rates at the end of every epoch.
 
     print('saving the model at the end of epoch %d, iters %d' % (epoch, total_iters))
