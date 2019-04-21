@@ -54,12 +54,12 @@ testset = ['Red_winged_Blackbird_0017_583846699', 'Yellow_headed_Blackbird_0009_
 testlen = len(testset)
 batch_size = 16
 imsize = 96
-depth = 5
+depth = 4
 extract = [1, 3, depth]
 
 #model_mode = 'classification'
-#model_mode = 're-identification'
-model_mode = 'autoencoder'
+model_mode = 're-identification'
+#model_mode = 'autoencoder'
 data_mode = 'cropped'
 
 epochs = 400
@@ -110,7 +110,7 @@ if __name__ == '__main__':
         criterion = nn.CrossEntropyLoss()
     if model_mode=='re-identification':
         caltech_data = caltech_data.type(torch.FloatTensor)
-        model = DiscriminatorReID(caltech_data.shape[1] - 1, 256, imsize, depth=depth, out_features=32, dropout=0.1)
+        model = DiscriminatorReID(caltech_data.shape[1] - 1, 512, imsize, depth=depth, out_features=64, dropout=0.1)
         criterion = nn.TripletMarginLoss()
     if model_mode=='autoencoder':
         model = GeneratorHeavy(5, 3, 512, 512, 512, imsize, depth=depth, preprocess=False, extract=extract)

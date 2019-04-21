@@ -1,5 +1,14 @@
 import torch
 import torch.nn as nn
+import warnings
+
+
+def custom_pad(kernel, pad):
+    if pad == 'zero':
+        return nn.ZeroPad2d(kernel)
+    if pad == 'reflect':
+        return nn.ReflectionPad2d(kernel)
+    warnings.warn('Bad pad method')
 
 
 class EncoderBlock(nn.Module):
@@ -12,8 +21,10 @@ class EncoderBlock(nn.Module):
         if activation is not None:
             if activation == 'relu':
                 self.full.add_module('relu', nn.ReLU(inplace=True))
-            if activation == 'lrelu':
+            elif activation == 'lrelu':
                 self.full.add_module('lrelu', nn.LeakyReLU(0.2, inplace=True))
+            else:
+                warnings.warn('Unsupported activation in EncoderBlock')
         if dropout > 0:
             self.full.add_module('dropout', nn.Dropout2d(p=dropout))
 
@@ -32,8 +43,10 @@ class DecoderBlock(nn.Module):
         if activation is not None:
             if activation == 'relu':
                 self.full.add_module('relu', nn.ReLU(inplace=True))
-            if activation == 'lrelu':
+            elif activation == 'lrelu':
                 self.full.add_module('lrelu', nn.LeakyReLU(0.2, inplace=True))
+            else:
+                warnings.warn('Unsupported activation in DecoderBlock')
 
     def forward(self, x):
         return self.full(x)
@@ -63,7 +76,7 @@ class E1(nn.Module):
             x.append(self.blocks[str(d)](x[-1]))
             # print(x[-1].shape)
 
-        x[self.depth] = x[self.depth].view(-1, self.bottom_features)
+        #x[self.depth] = x[self.depth].view(-1, self.bottom_features)
         if extract is None:
             return x[self.depth]
         return [x[d] if d in extract else None for d in range(self.depth + 1)]
@@ -92,14 +105,14 @@ class E2(nn.Module):
             x.append(self.blocks[str(d)](x[-1]))
             # print(x[-1].shape)
 
-        x[self.depth] = x[self.depth].view(-1, self.bottom_features)
+        #x[self.depth] = x[self.depth].view(-1, self.bottom_features)
         if extract is None:
             return x[self.depth]
         return [x[d] if d in extract else None for d in range(self.depth+1)]
 
 
 class EHeavy(nn.Module):
-    def __init__(self, input_nc, last_conv_nc, input_size, depth, activation='lrelu', dropout=0.):
+    def __init__(self, input_nc, last_conv_nc, input_size, depth, activation='lrelu', dropout=0., pad='reflect'):
         super(EHeavy, self).__init__()
         assert input_size // (2 ** depth) == input_size / (2 ** depth), 'Bad depth for input size'
         self.input_nc = input_nc
@@ -110,25 +123,25 @@ class EHeavy(nn.Module):
 
         self.blocks = nn.ModuleDict()
         self.blocks[str(0)] = nn.Sequential(
-            nn.ReflectionPad2d(1),
+            custom_pad(1, pad),
             EncoderBlock(self.input_nc, 32, kernel=3, stride=1, padding=0, activation=activation, dropout=dropout),
-            nn.ReflectionPad2d(1),
+            custom_pad(1, pad),
             EncoderBlock(32, 32, kernel=4, stride=2, padding=0, activation=activation, dropout=dropout)
         )
         for d in range(1, depth-1):
             filters_in = min(last_conv_nc, 32 * (2 ** (d-1)))
             filters_out = min(last_conv_nc, 32 * (2 ** d))
             self.blocks[str(d)] = nn.Sequential(
-                nn.ReflectionPad2d(1),
+                custom_pad(1, pad),
                 EncoderBlock(filters_in, filters_out, kernel=3, stride=1, padding=0, activation=activation, dropout=dropout),
-                nn.ReflectionPad2d(1),
+                custom_pad(1, pad),
                 EncoderBlock(filters_out, filters_out, kernel=4, stride=2, padding=0, activation=activation, dropout=dropout)
             )
         filters_in = min(last_conv_nc, 32 * (2 ** (depth - 2)))
         self.blocks[str(depth-1)] = nn.Sequential(
-            nn.ReflectionPad2d(1),
+            custom_pad(1, pad),
             EncoderBlock(filters_in, last_conv_nc, kernel=3, stride=1, padding=0, activation=activation, dropout=dropout),
-            nn.ReflectionPad2d(1),
+            custom_pad(1, pad),
             EncoderBlock(last_conv_nc, last_conv_nc, kernel=4, stride=2, padding=0, activation=activation, dropout=dropout)
         )
 
@@ -187,7 +200,7 @@ class Decoder(nn.Module):
 
 
 class DecoderHeavy(nn.Module):
-    def __init__(self, output_nc, last_conv_nc, input_size, depth, activation='relu', dropout=0., extract=None):
+    def __init__(self, output_nc, last_conv_nc, input_size, depth, activation='relu', dropout=0., extract=None, pad='reflect'):
         super(DecoderHeavy, self).__init__()
         assert input_size // (2 ** depth) == input_size / (2 ** depth), 'Bad depth for input size'
         self.output_nc = output_nc
@@ -198,7 +211,7 @@ class DecoderHeavy(nn.Module):
 
         self.blocks = nn.ModuleDict()
         self.blocks[str(depth-1)] = nn.Sequential(
-            nn.ReflectionPad2d(1),
+            custom_pad(1, pad),
             EncoderBlock(last_conv_nc, last_conv_nc, kernel=3, stride=1, padding=0, activation=activation, dropout=dropout),
             #nn.ReflectionPad2d(1),
             DecoderBlock(last_conv_nc, min(last_conv_nc, 32 * (2 ** (depth-2))), kernel=4, stride=2, padding=1, activation=activation, dropout=dropout)
@@ -207,19 +220,19 @@ class DecoderHeavy(nn.Module):
             filters_in = min(last_conv_nc, 32 * (2 ** d))
             filters_out = min(last_conv_nc, 32 * (2 ** (d-1)))
             self.blocks[str(d)] = nn.Sequential(
-                nn.ReflectionPad2d(1),
+                custom_pad(1, pad),
                 EncoderBlock(filters_in, filters_in, kernel=3, stride=1, padding=0, activation=activation, dropout=dropout),
                 #nn.ReflectionPad2d(1),
                 DecoderBlock(filters_in, filters_out, kernel=4, stride=2, padding=1, activation=activation, dropout=dropout)
             )
         self.blocks[str(0)] = nn.Sequential(
-            nn.ReflectionPad2d(1),
+            custom_pad(1, pad),
             EncoderBlock(32, 32, kernel=3, stride=1, padding=0, activation=activation, dropout=dropout),
             #nn.ReflectionPad2d(1),
             DecoderBlock(32, 32, kernel=4, stride=2, padding=1, activation=activation, dropout=dropout),
-            nn.ReflectionPad2d(1),
+            custom_pad(1, pad),
             EncoderBlock(32, 32, kernel=3, stride=1, padding=0, activation=activation, dropout=dropout),
-            nn.ReflectionPad2d(1),
+            custom_pad(1, pad),
             EncoderBlock(32, output_nc, kernel=3, stride=1, padding=0, activation=None, dropout=dropout)
         )
 
@@ -229,7 +242,7 @@ class DecoderHeavy(nn.Module):
             if extract is not None and d in extract:
                 filters = 32 * (2 ** min(4,d-1))
                 self.skip[str(d)] = nn.Sequential(
-                    nn.ReflectionPad2d(1),
+                    custom_pad(1, pad),
                     nn.Conv2d(2 * filters, filters, kernel_size=3, padding=0)
                 )
 
@@ -320,14 +333,14 @@ class Generator(nn.Module):
             #print(e_x2_B.shape)
             if extract is None:
                 z1 = torch.cat((e_x1_A, e_x2_B), dim=1)
-                z1 = self.Merger(z1)
+                z1 = self.Merger(z1.view(-1, self.E_A.bottom_features + self.E_B.bottom_features))
             else:
                 z1 = e_x1_A
                 # print('before z')
                 # print(e_x1_A[-1].shape)
                 # print(e_x2_B.shape)
                 z1[-1] = torch.cat((e_x1_A[-1], e_x2_B), dim=1)
-                z1[-1] = self.Merger(z1[-1])
+                z1[-1] = self.Merger(z1[-1].view(-1, self.E_A.bottom_features + self.E_B.bottom_features))
                 # print('after z')
             # print('decoding')
             y1 = self.Decoder(z1, use_activation=use_activation)
@@ -339,11 +352,11 @@ class Generator(nn.Module):
             e_x1_B = self.E_B(x1_B, extract=None)
             if extract is None:
                 z2 = torch.cat((e_x2_A, e_x1_B), dim=1)
-                z2 = self.Merger(z2)
+                z2 = self.Merger(z2.view(-1, self.E_A.bottom_features + self.E_B.bottom_features))
             else:
                 z2 = e_x2_A
                 z2[-1] = torch.cat((e_x2_A[-1], e_x1_B), dim=1)
-                z2[-1] = self.Merger(z2[-1])
+                z2[-1] = self.Merger(z2[-1].view(-1, self.E_A.bottom_features + self.E_B.bottom_features))
             y2 = self.Decoder(z2, use_activation=use_activation)
 
         if mode is None:
@@ -357,7 +370,7 @@ class Generator(nn.Module):
 
 
 class GeneratorHeavy(nn.Module):
-    def __init__(self, input_nc, output_nc, e1_conv_nc, e2_conv_nc, last_conv_nc, input_size, depth, preprocess=False, extract=None):
+    def __init__(self, input_nc, output_nc, e1_conv_nc, e2_conv_nc, last_conv_nc, input_size, depth, preprocess=False, extract=None, pad='reflect'):
         super(GeneratorHeavy, self).__init__()
         self.input_nc = input_nc
         self.output_nc = output_nc
@@ -369,10 +382,10 @@ class GeneratorHeavy(nn.Module):
         self.preprocess = preprocess
         self.extract = extract
 
-        self.E_A = EHeavy(self.input_nc, e1_conv_nc, input_size, depth)
-        self.E_B = EHeavy(self.input_nc, e2_conv_nc, input_size, depth)
-        self.Decoder = DecoderHeavy(output_nc, last_conv_nc, input_size, depth, extract=extract)
-        self.Merger = TransformerBlock(e1_conv_nc + e2_conv_nc, last_conv_nc, activation='rule')
+        self.E_A = EHeavy(self.input_nc, e1_conv_nc, input_size, depth, pad=pad)
+        self.E_B = EHeavy(self.input_nc, e2_conv_nc, input_size, depth, pad=pad)
+        self.Decoder = DecoderHeavy(output_nc, last_conv_nc, input_size, depth, extract=extract, pad=pad)
+        self.Merger = TransformerBlock(e1_conv_nc + e2_conv_nc, last_conv_nc, activation='relu')
 
     def forward(self, x, mask_in, mode=None, extract=None, use_activation=True):
         N, B, C, H, W = x.shape
@@ -499,17 +512,18 @@ class DiscriminatorReID(nn.Module):
 
         self.E = E1(input_nc, last_conv_nc, 0, self.input_size, depth, dropout=dropout)
         self.dropout = nn.Dropout2d(p=dropout)
-        self.linear1 = nn.Linear(last_conv_nc * self.feature_size * self.feature_size, out_features)
+        self.avg_pool = nn.AvgPool2d(self.feature_size)
+        self.linear1 = nn.Linear(last_conv_nc, out_features)
         self.sigmoid = nn.Sigmoid()
 
     def forward(self, x, use_activation=False):
-        x1 = self.E(x)
-        x2 = self.dropout(x1)
-        x3 = self.linear1(x2)
+        x = self.E(x)
+        x = self.dropout(x)
+        x = self.avg_pool(x)
+        x = self.linear1(x.view(-1, self.last_conv_nc))
         if use_activation:
-            x4 = self.sigmoid(x3)
-            return x4
-        return x3
+            x = self.sigmoid(x)
+        return x
 
 
 class DiscriminatorTriplet(nn.Module):
