@@ -495,7 +495,7 @@ class Discriminator(nn.Module):
 
     def forward(self, x):
         x = self.E(x)
-        x = self.linear(x)
+        x = self.linear(x.view(-1, self.last_conv_nc * self.feature_size * self.feature_size))
         #x = self.activation(x)
         return x
 
