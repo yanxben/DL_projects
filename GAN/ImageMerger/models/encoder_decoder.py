@@ -510,7 +510,7 @@ class DiscriminatorReID(nn.Module):
         self.feature_size = input_size // (2 ** depth)
         self.out_features = out_features
 
-        self.E = E1(input_nc, last_conv_nc, 0, self.input_size, depth, dropout=dropout)
+        self.E = E1(input_nc, last_conv_nc, 0, self.input_size, depth, activation='relu', dropout=dropout)
         self.dropout = nn.Dropout2d(p=dropout)
         self.avg_pool = nn.AvgPool2d(self.feature_size)
         self.linear1 = nn.Linear(last_conv_nc, out_features)

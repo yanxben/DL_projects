@@ -54,12 +54,14 @@ class mergeganmodel(BaseModel):
             parser.add_argument('--depth', type=int, default=5, help='')
             parser.add_argument('--reid_features', type=int, default=64, help='')
             parser.add_argument('--reid_freq', type=int, default=1, help='')
+            parser.add_argument('--pad', type=str, default='reflect', help='mode of padding zero/reflect')
 
             parser.add_argument('--no_background', dest='background', action='store_false', help='use background')
             parser.add_argument('--attention', dest='attention', action='store_true', help='use attention layer')
             parser.add_argument('--no_Disc', dest='Disc', action='store_false', help='use Disc')
             parser.add_argument('--no_ReID', dest='ReID', action='store_false', help='use ReID')
             parser.add_argument('--mask_ReID', dest='mask_ReID', action='store_true', help='use mask before ReID')
+            parser.add_argument('--mask_ReID_zero', dest='mask_ReID_zero', action='store_true', help='use mask before ReID')
 
             parser.add_argument('--lambda_G1', type=float, default=0.5,
                                 help='weight for cycle loss (A -> B -> A)')
@@ -125,7 +127,7 @@ class mergeganmodel(BaseModel):
         elif self.opt.model_config == 'heavy':
             self.netGen = encoder_decoder.GeneratorHeavy(opt.input_nc + (2 if opt.background else 0), opt.input_nc,
                                                     opt.e1_conv_nc, opt.e2_conv_nc, opt.last_conv_nc, opt.input_size,
-                                                    opt.depth, extract=[1, 3, opt.depth]).to(self.device)
+                                                    opt.depth, extract=[1, 3, opt.depth], pad=opt.pad).to(self.device)
         # Define Discriminators
         if self.isTrain:
             self.netDisc = encoder_decoder.Discriminator(opt.input_nc, opt.last_conv_nc, opt.input_size, opt.depth).to(self.device)
@@ -357,12 +359,18 @@ class mergeganmodel(BaseModel):
         # ReID
         if self.opt.ReID:
             if self.opt.mask_ReID:
-                real_a_embed = self.netReID(torch.where(self.mask_a >= .5, self.real_a, torch.zeros_like(self.real_a)))
-                real_p_embed = self.netReID(torch.where(self.mask_G[:, self.B] >= .5, self.real_G[:, self.B], torch.zeros_like(self.real_G[:, self.B])))
-                #real_p_embed = self.netReID(self.real_G[:,self.B])
-                real_n_embed = self.netReID(torch.where(self.mask_n >= .5, self.real_n, torch.zeros_like(self.real_n)))
-                fake_p_embed = self.netReID(torch.where(self.mask_G[:, self.A] >= .5, self.fake_G[:, self.A].detach(), torch.zeros_like(self.fake_G[:, self.A])))
-                #fake_p_embed = self.netReID(self.fake_G[:, self.A].detach())
+                if self.opt.mask_ReID_zero:
+                    real_a_embed = self.netReID(torch.where(self.mask_a >= .5, self.real_a, torch.zeros_like(self.real_a)))
+                    # real_p_embed = self.netReID(self.real_G[:,self.B])
+                    real_p_embed = self.netReID(torch.where(self.mask_G[:, self.B] >= .5, self.real_G[:, self.B], torch.zeros_like(self.real_G[:, self.B])))
+                    real_n_embed = self.netReID(torch.where(self.mask_n >= .5, self.real_n, torch.zeros_like(self.real_n)))
+                    # fake_p_embed = self.netReID(self.fake_G[:, self.A].detach())
+                    fake_p_embed = self.netReID(torch.where(self.mask_G[:, self.A] >= .5, self.fake_G[:, self.A].detach(), torch.zeros_like(self.fake_G[:, self.A])))
+                else:
+                    real_a_embed = self.netReID(self.real_a)
+                    real_p_embed = self.netReID(self.real_G[:, self.B])
+                    real_n_embed = self.netReID(self.real_n)
+                    fake_p_embed = self.netReID(torch.where(self.mask_G[:, self.A] >= .5, self.fake_G[:, self.A].detach(), self.real_G[:, self.A]))
             else:
                 real_a_embed = self.netReID(self.real_a)
                 real_p_embed = self.netReID(self.real_G[:, self.B])
@@ -396,12 +404,20 @@ class mergeganmodel(BaseModel):
         # ReID loss ReID(anchor, G(A,B))
         if self.opt.ReID and reid:
             if self.opt.mask_ReID:
-                real_a_embed = self.netReID(torch.where(self.mask_a >= .5, self.real_a, torch.zeros_like(self.real_a)))
-                fake_p_embed = self.netReID(torch.where(self.mask_G[:,self.A] >= .5, self.fake_G[:,self.A], torch.zeros_like(self.fake_G[:,self.A])))
+                if self.opt.mask_ReID_zero:
+                    real_a_embed = self.netReID(torch.where(self.mask_a >= .5, self.real_a, torch.zeros_like(self.real_a)))
+                    real_p_embed = self.netReID(torch.where(self.mask_G[:,self.B] >= .5, self.real_G[:,self.B], torch.zeros_like(self.real_G[:,self.B])))
+                    fake_p_embed = self.netReID(torch.where(self.mask_G[:,self.A] >= .5, self.fake_G[:,self.A], torch.zeros_like(self.fake_G[:,self.A])))
+                else:
+                    real_a_embed = self.netReID(self.real_a)
+                    real_p_embed = self.netReID(self.real_G[:, self.B])
+                    fake_p_embed = self.netReID(torch.where(self.mask_G[:, self.A] >= .5, self.fake_G[:, self.A], self.real_G[:, self.A]))
             else:
                 real_a_embed = self.netReID(self.real_a)
+                real_p_embed = self.netReID(self.real_G[:, self.B])
                 fake_p_embed = self.netReID(self.fake_G[:,self.A])
-            self.loss_GReID = torch.mean(self.criterionReID2(real_a_embed, fake_p_embed)) * self.opt.lambda_ReID
+            self.loss_GReID = (torch.mean(self.criterionReID2(real_a_embed, fake_p_embed)) +
+                               torch.mean(self.criterionReID2(real_p_embed, fake_p_embed))) * self.opt.lambda_ReID
         else:
             self.loss_GReID = 0
 
