@@ -406,18 +406,17 @@ class mergeganmodel(BaseModel):
             if self.opt.mask_ReID:
                 if self.opt.mask_ReID_zero:
                     real_a_embed = self.netReID(torch.where(self.mask_a >= .5, self.real_a, torch.zeros_like(self.real_a)))
-                    real_p_embed = self.netReID(torch.where(self.mask_G[:,self.B] >= .5, self.real_G[:,self.B], torch.zeros_like(self.real_G[:,self.B])))
+                    #real_p_embed = self.netReID(torch.where(self.mask_G[:,self.B] >= .5, self.real_G[:,self.B], torch.zeros_like(self.real_G[:,self.B])))
                     fake_p_embed = self.netReID(torch.where(self.mask_G[:,self.A] >= .5, self.fake_G[:,self.A], torch.zeros_like(self.fake_G[:,self.A])))
                 else:
                     real_a_embed = self.netReID(self.real_a)
-                    real_p_embed = self.netReID(self.real_G[:, self.B])
+                    #real_p_embed = self.netReID(self.real_G[:, self.B])
                     fake_p_embed = self.netReID(torch.where(self.mask_G[:, self.A] >= .5, self.fake_G[:, self.A], self.real_G[:, self.A]))
             else:
                 real_a_embed = self.netReID(self.real_a)
-                real_p_embed = self.netReID(self.real_G[:, self.B])
+                #real_p_embed = self.netReID(self.real_G[:, self.B])
                 fake_p_embed = self.netReID(self.fake_G[:,self.A])
-            self.loss_GReID = (torch.mean(self.criterionReID2(real_a_embed, fake_p_embed)) +
-                               torch.mean(self.criterionReID2(real_p_embed, fake_p_embed))) * self.opt.lambda_ReID
+            self.loss_GReID = torch.mean(self.criterionReID2(real_a_embed, fake_p_embed)) * self.opt.lambda_ReID
         else:
             self.loss_GReID = 0
 
