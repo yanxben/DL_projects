@@ -127,7 +127,7 @@ class mergeganmodel(BaseModel):
         elif self.opt.model_config == 'heavy':
             self.netGen = encoder_decoder.GeneratorHeavy(opt.input_nc + (2 if opt.background else 0), opt.input_nc,
                                                     opt.e1_conv_nc, opt.e2_conv_nc, opt.last_conv_nc, opt.input_size,
-                                                    opt.depth, extract=[2, 4, opt.depth], pad=opt.pad).to(self.device)
+                                                    opt.depth, extract=[2, opt.depth], pad=opt.pad).to(self.device)
         # Define Discriminators
         if self.isTrain:
             self.netDisc = encoder_decoder.Discriminator(opt.input_nc, opt.last_conv_nc, opt.input_size, opt.depth).to(self.device)
