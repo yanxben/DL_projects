@@ -47,18 +47,20 @@ testset = ['Red_winged_Blackbird_0017_583846699', 'Yellow_headed_Blackbird_0009_
      'Gray_Catbird_0031_148467783', 'Purple_Finch_0006_2329434675', 'American_Goldfinch_0004_155617438',
      'Blue_Grosbeak_0008_2450854752', 'Green_Kingfisher_0002_228927324', 'Pied_Kingfisher_0002_1020026028']
 testlen = len(testset)
-batch_size = 16
+batch_size = 8
 imsize = 96
 depth = 5
 extract = [1, depth]
+epochs = 400
 
 #model_mode = 'classification'
 #model_mode = 're-identification'
 #model_mode = 'autoencoder'
 model_mode = 'encoderdecoder'
 data_mode = 'cropped'
+save_dir = './checkpoints/encoder'
+save_filename = 'encoder.pth.tar'
 
-epochs = 400
 
 if __name__ == '__main__':
     t0 = time.time()
@@ -121,7 +123,7 @@ if __name__ == '__main__':
         #model = GeneratorHeavy(5, 3, 512, 512, 512, imsize, depth=depth, preprocess=False, extract=extract)
         encoder = EHeavy(5, 512, imsize, depth=depth)
         decoder = DecoderHeavy(3, 512, imsize, depth=depth, extract=extract)
-        criterion = nn.L1Loss()
+        criterion = nn.MSELoss()
         encoder.cuda()
         decoder.cuda()
         optimizerE = optim.Adam(encoder.parameters(), lr=0.0002)
@@ -329,10 +331,9 @@ if __name__ == '__main__':
                 plt.show(block=False)
 
             print('saving the model at the end of epoch %d, iters %d' % (epoch, total_iters))
-            save_filename = 'encoder.pth.tar'
-            if not os.path.isdir('./checkpoints/encoder'):
-                os.mkdir('./checkpoints/encoder')
-            save_path = os.path.join('./checkpoints/encoder', save_filename)
+            if not os.path.isdir(save_dir):
+                os.mkdir(save_dir)
+            save_path = os.path.join(save_dir, save_filename)
             save_model(encoder, save_path, optimizer=optimizerE)
 
             print('End of epoch %d / %d \t Time Taken: %d sec' % (epoch, epochs, time.time() - plot_start_time))
