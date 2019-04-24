@@ -62,6 +62,7 @@ class mergeganmodel(BaseModel):
             parser.add_argument('--no_ReID', dest='ReID', action='store_false', help='use ReID')
             parser.add_argument('--mask_ReID', dest='mask_ReID', action='store_true', help='use mask before ReID')
             parser.add_argument('--mask_ReID_zero', dest='mask_ReID_zero', action='store_true', help='use mask before ReID')
+            parser.add_argument('--ReID_mean', dest='ReID_mean', action='store_true', help='compare ReID on class mean')
 
             parser.add_argument('--lambda_G1', type=float, default=0.5,
                                 help='weight for cycle loss (A -> B -> A)')
@@ -132,6 +133,10 @@ class mergeganmodel(BaseModel):
         if self.isTrain:
             self.netDisc = encoder_decoder.Discriminator(opt.input_nc, opt.last_conv_nc, opt.input_size, opt.depth).to(self.device)
             self.netReID = encoder_decoder.DiscriminatorReID(opt.input_nc, opt.last_conv_nc, opt.input_size, opt.depth, out_features=opt.reid_features).to(self.device)
+            if opt.ReID_mean:
+                self.real_a_embed_mean = dict()
+                for i in range(1, 201):
+                    self.real_a_embed_mean[i] = torch.zeros([1, opt.reid_features]).to(self.device)
 
         if self.isTrain:
             # Define loss functions
@@ -169,6 +174,8 @@ class mergeganmodel(BaseModel):
         self.real_D = model_input['real_D'].clone()  # real images for discriminator
         self.real_a = model_input['real_a'].clone()  # anchor images for ReID
         self.real_n = model_input['real_n'].clone()  # negative images for ReID
+        if self.opt.ReID_mean:
+            self.real_a_labels = model_input['real_a_labels'].clone()  # anchor images for ReID
         N1, _, C1, H1, W1 = self.real_G.shape
         N2, C2, H2, W2 = self.real_D.shape
         N3, C3, H3, W3 = self.real_a.shape
@@ -416,6 +423,12 @@ class mergeganmodel(BaseModel):
                 real_a_embed = self.netReID(self.real_a)
                 #real_p_embed = self.netReID(self.real_G[:, self.B])
                 fake_p_embed = self.netReID(self.fake_G[:,self.A])
+
+            if self.opt.ReID_mean:
+                for i in range(real_a_embed.shape[0]):
+                    self.real_a_embed_mean[int(self.real_a_labels[i])] = 0.7*self.real_a_embed_mean[int(self.real_a_labels[i])] + 0.3*real_a_embed[i].detach()
+                for i in range(real_a_embed.shape[0]):
+                    real_a_embed[i] = self.real_a_embed_mean[int(self.real_a_labels[i])]
             self.loss_GReID = torch.mean(self.criterionReID2(real_a_embed, fake_p_embed)) * self.opt.lambda_ReID
         else:
             self.loss_GReID = 0

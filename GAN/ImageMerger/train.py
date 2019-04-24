@@ -80,7 +80,8 @@ if __name__ == '__main__':
                         'real_a': testset['images'][:testlen//2, :3, :, :],                 # Unused
                         'mask_a': testset['images'][:testlen // 2, 3, :, :].unsqueeze(1),   # Unused
                         'real_n': testset['images'][:testlen//2, :3, :, :],                 # Unused
-                        'mask_n': testset['images'][:testlen//2, 3, :, :].unsqueeze(1)      # Unused
+                        'mask_n': testset['images'][:testlen//2, 3, :, :].unsqueeze(1),      # Unused
+                        'real_a_labels': testset['labels'],  # anchor images for ReID
                         }
 
     #caltech_data = caltech_data.cuda()
@@ -129,17 +130,18 @@ if __name__ == '__main__':
                 indices = (caltech_labels != label_a).nonzero()
                 batch_n[k] = indices[torch.randint(indices.numel(), (1,))]
 
-            if opt.data_mode=='range':
+            if opt.data_mode == 'range':
                 bboxes = [caltech_bboxes[b] for b in batch]
                 images = crop_data(caltech_data[batch], bboxes, opt.input_size)
                 bboxes = [caltech_bboxes[b] for b in batch_a]
                 images_a = crop_data(caltech_data[batch_a], bboxes, opt.input_size)
                 bboxes = [caltech_bboxes[b] for b in batch_n]
                 images_n = crop_data(caltech_data[batch_n], bboxes, opt.input_size)
-            if opt.data_mode=='cropped':
+            if opt.data_mode == 'cropped':
                 images = caltech_data[batch]
                 images_a = caltech_data[batch_a]
                 images_n = caltech_data[batch_n]
+            labels_a = caltech_labels[batch_a]
 
             model_input = {'real_G': images[:, :3, :, :].reshape([-1, 2, 3, opt.input_size, opt.input_size]),  # image pairs for generator
                            'mask_G': images[:, 3, :, :].unsqueeze(1).unsqueeze(1).reshape([-1, 2, 1, opt.input_size, opt.input_size]),  # mask for real_G
@@ -149,6 +151,7 @@ if __name__ == '__main__':
                            'mask_a': images_a[:, 3, :, :].unsqueeze(1),  # mask for ReID
                            'real_n': images_n[:, :3, :, :],  # negative images for ReID
                            'mask_n': images_n[:, 3, :, :].unsqueeze(1),  # mask for ReID
+                           'real_a_labels': labels_a,  # anchor images for ReID
                            }
 
             model.set_input(model_input, 'mix' if i % 1 == 0 else 'reflection', load=True)  # unpack data from dataset and apply preprocessing
