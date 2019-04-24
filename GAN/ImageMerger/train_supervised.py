@@ -47,7 +47,7 @@ testset = ['Red_winged_Blackbird_0017_583846699', 'Yellow_headed_Blackbird_0009_
      'Gray_Catbird_0031_148467783', 'Purple_Finch_0006_2329434675', 'American_Goldfinch_0004_155617438',
      'Blue_Grosbeak_0008_2450854752', 'Green_Kingfisher_0002_228927324', 'Pied_Kingfisher_0002_1020026028']
 testlen = len(testset)
-batch_size = 8
+batch_size = 16
 imsize = 96
 depth = 5
 extract = [1, depth]
