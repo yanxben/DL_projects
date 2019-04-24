@@ -22,21 +22,16 @@ See frequently asked questions at: https://github.com/junyanz/pytorch-CycleGAN-a
 import os
 import socket
 import time
-import random
 
 import matplotlib
-#matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import torch
 from torch import optim
 from torch import nn
 
-from models.encoder_decoder import DiscriminatorReID, DiscriminatorTriplet, Classifier200, Generator, GeneratorHeavy, AutoEncoder2
-from options.train_options import TrainOptions
+from models.encoder_decoder import DiscriminatorReID, DiscriminatorTriplet, Classifier200, Generator, GeneratorHeavy, AutoEncoder2, EHeavy, DecoderHeavy
 from data.data_caltech_ucsd import create_dataset_caltech_ucsd, crop_data
-from models import create_model
-
-#from util.visualizer import Visualizer
+from models.utils_save import save_model
 
 
 def tensor2im(t):
@@ -54,12 +49,13 @@ testset = ['Red_winged_Blackbird_0017_583846699', 'Yellow_headed_Blackbird_0009_
 testlen = len(testset)
 batch_size = 16
 imsize = 96
-depth = 4
-extract = [1, 3, depth]
+depth = 5
+extract = [1, depth]
 
 #model_mode = 'classification'
-model_mode = 're-identification'
+#model_mode = 're-identification'
 #model_mode = 'autoencoder'
+model_mode = 'encoderdecoder'
 data_mode = 'cropped'
 
 epochs = 400
@@ -73,7 +69,7 @@ if __name__ == '__main__':
     elif os.sys.platform == 'linux':
         plot = False
         caltech_path = '/home/' + os.getlogin() + '/Datasets/Caltech-UCSD-Birds-200'
-    _, caltech_data, caltech_meta, testset = create_dataset_caltech_ucsd(caltech_path, batch_size, imsize=imsize, mode=data_mode, testset=testset)  # create a dataset given opt.dataset_mode and other options
+    _, caltech_data, caltech_meta, testset = create_dataset_caltech_ucsd(caltech_path, batch_size, size=None, imsize=imsize, mode=data_mode, testset=testset)  # create a dataset given opt.dataset_mode and other options
     #dataset_size = len(dataset)    # get the number of images in the dataset.
     #print('The number of training epochs = %d' % dataset_size)
     caltech_labels = caltech_meta['labels']
@@ -108,16 +104,28 @@ if __name__ == '__main__':
     if model_mode == 'classification':
         model = Classifier200(caltech_data.shape[1], 512, imsize, depth=depth)
         criterion = nn.CrossEntropyLoss()
+        model.cuda()
+        optimizer = optim.Adam(model.parameters(), lr=0.0002)
     if model_mode=='re-identification':
         caltech_data = caltech_data.type(torch.FloatTensor)
         model = DiscriminatorReID(caltech_data.shape[1] - 1, 512, imsize, depth=depth, out_features=64, dropout=0.1)
         criterion = nn.TripletMarginLoss()
+        model.cuda()
+        optimizer = optim.Adam(model.parameters(), lr=0.0002)
     if model_mode=='autoencoder':
         model = GeneratorHeavy(5, 3, 512, 512, 512, imsize, depth=depth, preprocess=False, extract=extract)
         criterion = nn.MSELoss()
-
-    model.cuda()
-    optimizer = optim.Adam(model.parameters(), lr=0.0002)
+        model.cuda()
+        optimizer = optim.Adam(model.parameters(), lr=0.0002)
+    if model_mode=='encoderdecoder':
+        #model = GeneratorHeavy(5, 3, 512, 512, 512, imsize, depth=depth, preprocess=False, extract=extract)
+        encoder = EHeavy(5, 512, imsize, depth=depth)
+        decoder = DecoderHeavy(3, 512, imsize, depth=depth, extract=extract)
+        criterion = nn.L1Loss()
+        encoder.cuda()
+        decoder.cuda()
+        optimizerE = optim.Adam(encoder.parameters(), lr=0.0002)
+        optimizerD = optim.Adam(decoder.parameters(), lr=0.0002)
 
     print('End of initialization. Time Taken: %d sec' % (time.time() - t0))
 
@@ -133,8 +141,9 @@ if __name__ == '__main__':
                 continue  # ignore tail of data if tail is smaller than batch_size
             batch = trainset[batch_idx]
 
-            if model_mode=='re-identification':
+            if model_mode == 're-identification':
                 _, C, H, W = caltech_data.shape
+                # Collect positive anc negative
                 batch_p = torch.zeros_like(batch)
                 batch_n = torch.zeros_like(batch)
                 for k in range(batch_size):
@@ -147,7 +156,6 @@ if __name__ == '__main__':
                 images_a, images_p, images_n = caltech_data[batch, :C-1], caltech_data[batch_p, :C-1], caltech_data[batch_n, :C-1]
 
                 # Preprocess
-                # if data_mode == 'cropped':
                 images_a = caltech_data[batch][:, :3]
                 images_p = caltech_data[batch_p][:, :3]
                 images_n = caltech_data[batch_n][:, :3]
@@ -167,7 +175,7 @@ if __name__ == '__main__':
                 images_n = torch.where(flip == 1, images_n.flip(3), images_n)
                 images_a, images_p, images_n = im2tensor(images_a), im2tensor(images_p), im2tensor(images_n)
 
-            if model_mode=='autoencoder':
+            if model_mode == 'autoencoder':
                 _, C, H, W = caltech_data.shape
                 images = caltech_data[batch, :, :, :]
                 if data_mode == 'range':
@@ -181,23 +189,47 @@ if __name__ == '__main__':
                 images = images[:, :C-1, :, :].unsqueeze(1).expand([batch_size, 2, C-1, H, W])
                 images = im2tensor(images)
                 # Particularly in this test we want to mask the object in image A to achieve recreation using deep features of image B
-                images[:,0] = torch.where(mask[:,0].unsqueeze(1).expand_as(images[:,0]) > .5,
-                                          torch.zeros_like(images[:,0]), images[:,0])
+                images[:,0] = torch.where(mask[:,0].unsqueeze(1).expand_as(images[:,0]) > .5, torch.zeros_like(images[:,0]), images[:,0])
 
-            # Zero the parameter gradients
-            optimizer.zero_grad()
+            if model_mode=='encoderdecoder':
+                _, C, H, W = caltech_data.shape
+                images = caltech_data[batch, :, :, :]
+                if data_mode == 'range':
+                    bboxes = [caltech_bboxes[b] for b in batch]
+                    images = crop_data(images, bboxes, imsize)
+
+                flip = torch.randint(2, (batch_size, 1, 1, 1)).expand_as(images)
+                images = torch.where(flip == 1, images.flip(3), images)
+                labels = images[:, :C - 1, :, :]
+                images = torch.cat((images, 1 - images[:, C-1, :, :].unsqueeze(1)), dim=1)
+                images[:, :C-1, :, :] = im2tensor(images[:, :C-1, :, :])
 
             # Run train iteration
             if model_mode == 're-identification':
+                optimizer.zero_grad()  # Zero the parameter gradients
                 embed_a, embed_p, embed_n = model(images_a.cuda()), model(images_p.cuda()), model(images_n.cuda())
                 loss = criterion(embed_a, embed_p, embed_n)
+                # Run backward
+                loss.backward()
+                optimizer.step()
             if model_mode == 'autoencoder':
+                optimizer.zero_grad()  # Zero the parameter gradients
                 yhat = model(images.cuda(), mask_in=mask.cuda(), mode=0, extract=extract, use_activation=True)
                 loss = criterion(yhat, labels.cuda())
-
-            # Run backward
-            loss.backward()
-            optimizer.step()
+                # Run backward
+                loss.backward()
+                optimizer.step()
+            if model_mode == 'encoderdecoder':
+                optimizerE.zero_grad()  # Zero the parameter gradients
+                optimizerD.zero_grad()  # Zero the parameter gradients
+                z = encoder(images.cuda(), extract=extract)
+                z[1] = torch.where(images[:, -1, ::2, ::2].cuda().unsqueeze(1).expand_as(z[1]) >= 0.5, z[1], torch.zeros_like(z[1]))
+                yhat = decoder(z)
+                loss = criterion(yhat, labels.cuda())
+                # Run backward
+                loss.backward()
+                optimizerE.step()
+                optimizerD.step()
 
             total_iters += 1
             epoch_iter += 1
@@ -205,7 +237,7 @@ if __name__ == '__main__':
             num_iterations += 1
 
             # Keep last examples
-            if model_mode == 'autoencoder':
+            if model_mode in ['autoencoder', 'encoderdecoder']:
                 last_data_images = tensor2im(images)
                 last_yhat = tensor2im(yhat.detach().cpu())
             if model_mode == 're-identification':
@@ -236,9 +268,10 @@ if __name__ == '__main__':
 
                 if model_mode == 'autoencoder':
                     _, C, H, W = caltech_data.shape
-                    labels = caltech_data[validationset, :C - 1, :, :]
-                    mask = caltech_data[validationset, C - 1, :, :].unsqueeze(1).expand([validationset.shape[0], 2, H, W])
-                    images = caltech_data[validationset, :C - 1, :, :].unsqueeze(1).expand([validationset.shape[0], 2, C - 1, H, W])
+                    images = caltech_data[validationset]
+                    labels = images[:, :C - 1, :, :]
+                    mask = images[:, C - 1, :, :].unsqueeze(1).expand([validationset.shape[0], 2, H, W])
+                    images = images[:, :C - 1, :, :].unsqueeze(1).expand([validationset.shape[0], 2, C - 1, H, W])
                     images = im2tensor(images)
                     # Mask image A in the same manner as is done in training
                     images[:, 0] = torch.where(mask[:, 0].unsqueeze(1).expand_as(images[:, 0]) > .5,
@@ -247,8 +280,17 @@ if __name__ == '__main__':
                     yhat = model(images.cuda(), mask_in=mask.cuda(), mode=0, extract=extract, use_activation=True)
                     val_loss = criterion(yhat, labels.cuda())
 
-                    # last_data_images = tensor2im(images)
-                    # last_yhat = tensor2im(yhat.detach().cpu())
+                if model_mode == 'encoderdecoder':
+                    _, C, H, W = caltech_data.shape
+                    images = caltech_data[validationset]
+                    images = torch.cat((images, 1 - images[:, C-1, :, :].unsqueeze(1)), dim=1)
+                    labels = images[:, :C - 1, :, :]
+                    images[:, :C - 1, :, :] = im2tensor(images[:, :C - 1, :, :])
+
+                    z = encoder(images.cuda(), extract=extract)
+                    z[1] = torch.where(images[:, -1, ::2, ::2].cuda().unsqueeze(1).expand_as(z[1]) >= 0.5, z[1], torch.zeros_like(z[1]))
+                    yhat = decoder(z)
+                    val_loss = criterion(yhat, labels.cuda())
 
             print('Epoch {:d}: train loss {:.4f} --- val loss {:.4f}'.format(epoch, running_loss / num_iterations, val_loss))
 
@@ -256,14 +298,23 @@ if __name__ == '__main__':
                 if model_mode == 'autoencoder':
                     for m in range(6):
                         plt.subplot(4, 6, m + 1)
-                        plt.imshow(last_data_images[m,1].permute([1, 2, 0]))
+                        plt.imshow(last_data_images[m, 1].permute([1, 2, 0]))
                         plt.subplot(4, 6, m + 7)
                         plt.imshow(last_yhat[m].permute([1, 2, 0]))
                         plt.subplot(4, 6, m + 13)
-                        plt.imshow(tensor2im(images)[5*m,1].permute([1, 2, 0]))
+                        plt.imshow(tensor2im(images)[5*m, 1].permute([1, 2, 0]))
                         plt.subplot(4, 6, m + 19)
                         plt.imshow(tensor2im(yhat.detach().cpu())[5*m].permute([1, 2, 0]))
-
+                if model_mode == 'encoderdecoder':
+                    for m in range(6):
+                        plt.subplot(4, 6, m + 1)
+                        plt.imshow(last_data_images[m, :C-1].permute([1, 2, 0]))
+                        plt.subplot(4, 6, m + 7)
+                        plt.imshow(last_yhat[m].permute([1, 2, 0]))
+                        plt.subplot(4, 6, m + 13)
+                        plt.imshow(tensor2im(images)[5*m, :C-1].permute([1, 2, 0]))
+                        plt.subplot(4, 6, m + 19)
+                        plt.imshow(tensor2im(yhat.detach().cpu())[5*m].permute([1, 2, 0]))
                 if model_mode == 're-identification':
                     for m in range(4):
                         plt.subplot(3, 4, m + 1)
@@ -277,9 +328,13 @@ if __name__ == '__main__':
                 plt.pause(0.001)
                 plt.show(block=False)
 
-            #print('saving the model at the end of epoch %d, iters %d' % (epoch, total_iters))
-            #save_suffix = 'epoch_%d' % epoch
-            #model.save_networks(save_suffix)
+            print('saving the model at the end of epoch %d, iters %d' % (epoch, total_iters))
+            save_filename = 'encoder.pth.tar'
+            if not os.path.isdir('./checkpoints/encoder'):
+                os.mkdir('./checkpoints/encoder')
+            save_path = os.path.join('./checkpoints/encoder', save_filename)
+            save_model(encoder, save_path, optimizer=optimizerE)
+
             print('End of epoch %d / %d \t Time Taken: %d sec' % (epoch, epochs, time.time() - plot_start_time))
             plot_start_time = time.time()
 
