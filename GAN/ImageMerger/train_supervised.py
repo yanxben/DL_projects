@@ -47,7 +47,7 @@ testset = ['Red_winged_Blackbird_0017_583846699', 'Yellow_headed_Blackbird_0009_
      'Gray_Catbird_0031_148467783', 'Purple_Finch_0006_2329434675', 'American_Goldfinch_0004_155617438',
      'Blue_Grosbeak_0008_2450854752', 'Green_Kingfisher_0002_228927324', 'Pied_Kingfisher_0002_1020026028']
 testlen = len(testset)
-batch_size = 16
+batch_size = 64
 imsize = 96
 depth = 5
 extract = [1, depth]
@@ -330,9 +330,9 @@ if __name__ == '__main__':
 
             print('saving the model at the end of epoch %d, iters %d' % (epoch, total_iters))
             save_filename = 'encoder.pth.tar'
-            if not os.path.isdir('./checkpoints/encoder'):
-                os.mkdir('./checkpoints/encoder')
-            save_path = os.path.join('./checkpoints/encoder', save_filename)
+            if not os.path.isdir('./checkpoints/encoder5'):
+                os.mkdir('./checkpoints/encoder5')
+            save_path = os.path.join('./checkpoints/encoder5', save_filename)
             save_model(encoder, save_path, optimizer=optimizerE)
 
             print('End of epoch %d / %d \t Time Taken: %d sec' % (epoch, epochs, time.time() - plot_start_time))
