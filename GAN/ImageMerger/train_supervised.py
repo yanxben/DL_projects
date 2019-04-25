@@ -49,16 +49,16 @@ testset = ['Red_winged_Blackbird_0017_583846699', 'Yellow_headed_Blackbird_0009_
 testlen = len(testset)
 batch_size = 16
 imsize = 96
-depth = 5
+depth = 4
 extract = [1, depth]
-epochs = 400
+epochs = 500
 
 #model_mode = 'classification'
 #model_mode = 're-identification'
 #model_mode = 'autoencoder'
 model_mode = 'encoderdecoder'
 data_mode = 'cropped'
-save_dir = './checkpoints/encoderBatchL1'
+save_dir = './checkpoints/encoder4BatchL1'
 save_filename = 'encoder.pth.tar'
 
 
