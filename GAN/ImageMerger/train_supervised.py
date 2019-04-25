@@ -99,6 +99,8 @@ if __name__ == '__main__':
 
     if model_mode == 'autoencoder':
         plt.figure(model_mode, figsize=(1920 / 100, 1080 / 100), dpi=100)
+    if model_mode == 'encoderdecoder':
+        plt.figure(model_mode, figsize=(1920 / 100, 1080 / 100), dpi=100)
     if model_mode == 're-identification':
         plt.figure(model_mode, figsize=(1920 / 100, 1080 / 100), dpi=100)
 
@@ -133,7 +135,7 @@ if __name__ == '__main__':
 
     total_iters = 0  # the total number of training iterations
     plot_start_time = time.time()
-    for epoch in range(1, epochs):    # outer loop for different epochs; we save the model by <epoch_count>, <epoch_count>+<save_latest_freq>
+    for epoch in range(1, epochs+1):    # outer loop for different epochs; we save the model by <epoch_count>, <epoch_count>+<save_latest_freq>
         epoch_start_time = time.time()  # timer for entire epoch
         epoch_iter = 0                  # the number of training iterations in current epoch, reset to 0 every epoch
         num_iterations = 0
