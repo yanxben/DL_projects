@@ -13,6 +13,49 @@ def im2tensor(i):
     return (i - 0.5) * 2
 
 
+class EncoderDecoder:
+    def __init__(self, mode, input_nc, output_nc, e_conv_nc, d_conv_nc, input_size, depth, extract=None, pad='reflect'):
+        self.extract = extract
+        self.E = encoder_decoder.EHeavy(input_nc, e_conv_nc, input_size, depth, pad=pad)
+        if mode == 'light':
+            self.G = encoder_decoder.GeneratorDecoder(2 * self.E.bottom_features, output_nc, d_conv_nc, input_size, depth, extract=extract)
+        else:
+            self.G = encoder_decoder.GeneratorDecoderHeavy(e_conv_nc, output_nc, d_conv_nc, input_size,
+                                                           depth, extract=extract)
+
+    def __call__(self, x, mask_in, mode=None):
+        N, B, C, H, W = x.shape
+        if mode is None:
+            mask_in1 = mask_in[:, 0, 0, :, :].unsqueeze(1)
+            mask_in2 = mask_in[:, 1, 0, :, :].unsqueeze(1)
+        else:
+            mask_in1 = mask_in[:, 0, :, :].unsqueeze(1)
+            mask_in2 = mask_in[:, 0, :, :].unsqueeze(1)
+        mask_in1 = torch.cat((mask_in1, 1 - mask_in1), dim=1)
+        mask_in2 = torch.cat((mask_in2, 1 - mask_in2), dim=1)
+
+        x1 = torch.cat((x[:, 0, :, :, :], mask_in1), dim=1)
+        x2 = torch.cat((x[:, 1, :, :, :], mask_in2), dim=1)
+        e_x1 = self.E(x1, extract=self.extract)
+        e_x2 = self.E(x2, extract=self.extract)
+        y = self.G(e_x1, e_x2, mode)
+        return y
+
+    def parameters(self):
+        return self.G.parameters()
+
+    def state_dict(self):
+        return self.G.state_dict()
+
+    def load_state_dict(self, state):
+        self.G.load_state_dict(state)
+
+    def to(self, device):
+        self.E.to(device)
+        self.G.to(device)
+        return self
+
+
 class mergeganmodel(BaseModel):
     """
     This class implements the CycleGAN model, for learning image-to-image translation without paired data.
@@ -47,6 +90,8 @@ class mergeganmodel(BaseModel):
         parser.set_defaults(no_dropout=True)  # default CycleGAN did not use dropout
         if is_train:
             parser.add_argument('--model_config', type=str, default='light', help='type of model light/heavy')
+            parser.add_argument('--encoder_load_path', type=str, default='', help='path to encoder for model type decoder')
+
             parser.add_argument('--last_conv_nc', type=int, default=512, help='')
             parser.add_argument('--e1_conv_nc', type=int, default=512, help='')
             parser.add_argument('--e2_conv_nc', type=int, default=512, help='')
@@ -129,6 +174,15 @@ class mergeganmodel(BaseModel):
             self.netGen = encoder_decoder.GeneratorHeavy(opt.input_nc + (2 if opt.background else 0), opt.input_nc,
                                                     opt.e1_conv_nc, opt.e2_conv_nc, opt.last_conv_nc, opt.input_size,
                                                     opt.depth, extract=[2, opt.depth], pad=opt.pad).to(self.device)
+        elif self.opt.model_config == 'decoder':
+            self.netGen = EncoderDecoder('heavy', opt.input_nc + (2 if opt.background else 0), opt.input_nc,
+                                         opt.e1_conv_nc, opt.last_conv_nc, opt.input_size,
+                                         opt.depth, extract=[1, opt.depth], pad=opt.pad).to(self.device)
+            from . import utils_save
+            utils_save.load_model(self.netGen.E, opt.encoder_load_path)
+            self.set_requires_grad([self.netGen.E], requires_grad=False)
+
+
         # Define Discriminators
         if self.isTrain:
             self.netDisc = encoder_decoder.Discriminator(opt.input_nc, opt.last_conv_nc, opt.input_size, opt.depth).to(self.device)
