@@ -58,7 +58,7 @@ epochs = 400
 #model_mode = 'autoencoder'
 model_mode = 'encoderdecoder'
 data_mode = 'cropped'
-save_dir = './checkpoints/encoder'
+save_dir = './checkpoints/encoderBatchL1'
 save_filename = 'encoder.pth.tar'
 
 
@@ -123,7 +123,7 @@ if __name__ == '__main__':
         #model = GeneratorHeavy(5, 3, 512, 512, 512, imsize, depth=depth, preprocess=False, extract=extract)
         encoder = EHeavy(5, 512, imsize, depth=depth)
         decoder = DecoderHeavy(3, 512, imsize, depth=depth, extract=extract)
-        criterion = nn.MSELoss()
+        criterion = nn.L1Loss()
         encoder.cuda()
         decoder.cuda()
         optimizerE = optim.Adam(encoder.parameters(), lr=0.0002)

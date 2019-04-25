@@ -12,12 +12,18 @@ def custom_pad(kernel, pad):
 
 
 class EncoderBlock(nn.Module):
-    def __init__(self, filters_in, filters_out, kernel=4, stride=2, padding=1, activation=None, dropout=0.):
+    def __init__(self, filters_in, filters_out, kernel=4, stride=2, padding=1, activation=None, normalization='batch', dropout=0.):
         super(EncoderBlock, self).__init__()
-        self.full = nn.Sequential(
-            nn.Conv2d(filters_in, filters_out, kernel, stride, padding),
-            nn.InstanceNorm2d(filters_out),
-        )
+        self.full = nn.Sequential()
+        self.full.add_module('conv', nn.Conv2d(filters_in, filters_out, kernel, stride, padding))
+        if normalization is not None:
+            if normalization == 'instance':
+                self.full.add_module('norm', nn.InstanceNorm2d(filters_out))
+            if normalization == 'batch':
+                self.full.add_module('norm', nn.BatchNorm2d(filters_out))
+            else:
+                warnings.warn('Unsupported normalization in EncoderBlock')
+
         if activation is not None:
             if activation == 'relu':
                 self.full.add_module('relu', nn.ReLU(inplace=True))
@@ -33,13 +39,19 @@ class EncoderBlock(nn.Module):
 
 
 class DecoderBlock(nn.Module):
-    def __init__(self, filters_in, filters_out, kernel=4, stride=2, padding=1, activation=None, dropout=0.):
+    def __init__(self, filters_in, filters_out, kernel=4, stride=2, padding=1, activation=None, normalization='batch', dropout=0.):
         super(DecoderBlock, self).__init__()
         self.full = nn.Sequential()
         if dropout > 0:
             self.full.add_module('dropout', nn.Dropout2d(p=dropout))
         self.full.add_module('conv2d', nn.ConvTranspose2d(filters_in, filters_out, kernel, stride, padding))
-        self.full.add_module('norm', nn.InstanceNorm2d(filters_out))
+        if normalization is not None:
+            if normalization == 'instance':
+                self.full.add_module('norm', nn.InstanceNorm2d(filters_out))
+            if normalization == 'batch':
+                self.full.add_module('norm', nn.BatchNorm2d(filters_out))
+            else:
+                warnings.warn('Unsupported normalization in EncoderBlock')
         if activation is not None:
             if activation == 'relu':
                 self.full.add_module('relu', nn.ReLU(inplace=True))
