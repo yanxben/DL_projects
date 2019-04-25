@@ -20,7 +20,7 @@ class EncoderDecoder:
         if mode == 'light':
             self.G = encoder_decoder.GeneratorDecoder(2 * self.E.bottom_features, output_nc, d_conv_nc, input_size, depth, extract=extract)
         else:
-            self.G = encoder_decoder.GeneratorDecoderHeavy(e_conv_nc, output_nc, d_conv_nc, input_size,
+            self.G = encoder_decoder.GeneratorDecoderHeavy(2 * e_conv_nc, output_nc, d_conv_nc, input_size,
                                                            depth, extract=extract)
 
     def __call__(self, x, mask_in, mode=None):
