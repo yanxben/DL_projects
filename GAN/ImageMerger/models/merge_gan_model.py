@@ -38,6 +38,11 @@ class EncoderDecoder:
         x2 = torch.cat((x[:, 1, :, :, :], mask_in2), dim=1)
         e_x1 = self.E(x1, extract=self.extract)
         e_x2 = self.E(x2, extract=self.extract)
+
+        e_x1[1] = torch.where(mask_in1[:, 1, ::2, ::2].unsqueeze(1).expand_as(e_x1[self.extract[0]]) >= 0.5,
+                                            e_x1[1], torch.zeros_like(e_x1[1]))
+        e_x2[1] = torch.where(mask_in2[:, 1, ::2, ::2].unsqueeze(1).expand_as(e_x2[self.extract[0]]) >= 0.5,
+                                            e_x2[1], torch.zeros_like(e_x2[1]))
         y = self.G(e_x1, e_x2, mode)
         return y
 
@@ -53,6 +58,11 @@ class EncoderDecoder:
     def to(self, device):
         self.E.to(device)
         self.G.to(device)
+        return self
+
+    def cuda(self):
+        self.E.cuda()
+        self.G.cuda()
         return self
 
 
@@ -175,7 +185,7 @@ class mergeganmodel(BaseModel):
                                                     opt.e1_conv_nc, opt.e2_conv_nc, opt.last_conv_nc, opt.input_size,
                                                     opt.depth, extract=[2, opt.depth], pad=opt.pad).to(self.device)
         elif self.opt.model_config == 'decoder':
-            self.netGen = EncoderDecoder('heavy', opt.input_nc + (2 if opt.background else 0), opt.input_nc,
+            self.netGen = EncoderDecoder('light', opt.input_nc + (2 if opt.background else 0), opt.input_nc,
                                          opt.e1_conv_nc, opt.last_conv_nc, opt.input_size,
                                          opt.depth, extract=[1, opt.depth], pad=opt.pad).to(self.device)
             from . import utils_save
@@ -196,7 +206,7 @@ class mergeganmodel(BaseModel):
             # Define loss functions
             self.criterionGAN = networks.GANLoss(opt.gan_mode).to(self.device)  # define GAN loss
             self.criterionReID1 = torch.nn.TripletMarginLoss()  # Define Re-Identification loss for triplet
-            self.criterionReID2 = torch.nn.PairwiseDistance()  #  Define Re-Identification loss for pair
+            self.criterionReID2 = torch.nn.PairwiseDistance()   # Define Re-Identification loss for pair
             self.criterionBackground = torch.nn.L1Loss()
             self.criterionCycle = torch.nn.L1Loss()
             # Initialize optimizers; schedulers will be automatically created by function <BaseModel.setup>.
