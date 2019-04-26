@@ -12,14 +12,14 @@ def custom_pad(kernel, pad):
 
 
 class EncoderBlock(nn.Module):
-    def __init__(self, filters_in, filters_out, kernel=4, stride=2, padding=1, activation=None, normalization='instance', dropout=0.):
+    def __init__(self, filters_in, filters_out, kernel=4, stride=2, padding=1, activation=None, normalization='batch', dropout=0.):
         super(EncoderBlock, self).__init__()
         self.full = nn.Sequential()
         self.full.add_module('conv', nn.Conv2d(filters_in, filters_out, kernel, stride, padding))
         if normalization is not None:
             if normalization == 'instance':
                 self.full.add_module('norm', nn.InstanceNorm2d(filters_out))
-            if normalization == 'batch':
+            elif normalization == 'batch':
                 self.full.add_module('norm', nn.BatchNorm2d(filters_out))
             else:
                 warnings.warn('Unsupported normalization in EncoderBlock')
@@ -39,7 +39,7 @@ class EncoderBlock(nn.Module):
 
 
 class DecoderBlock(nn.Module):
-    def __init__(self, filters_in, filters_out, kernel=4, stride=2, padding=1, activation=None, normalization='instance', dropout=0.):
+    def __init__(self, filters_in, filters_out, kernel=4, stride=2, padding=1, activation=None, normalization='batch', dropout=0.):
         super(DecoderBlock, self).__init__()
         self.full = nn.Sequential()
         if dropout > 0:
@@ -48,7 +48,7 @@ class DecoderBlock(nn.Module):
         if normalization is not None:
             if normalization == 'instance':
                 self.full.add_module('norm', nn.InstanceNorm2d(filters_out))
-            if normalization == 'batch':
+            elif normalization == 'batch':
                 self.full.add_module('norm', nn.BatchNorm2d(filters_out))
             else:
                 warnings.warn('Unsupported normalization in EncoderBlock')
@@ -124,7 +124,7 @@ class E2(nn.Module):
 
 
 class EHeavy(nn.Module):
-    def __init__(self, input_nc, last_conv_nc, input_size, depth, activation='lrelu', dropout=0., pad='reflect', normalization='instance'):
+    def __init__(self, input_nc, last_conv_nc, input_size, depth, activation='lrelu', dropout=0., pad='reflect', normalization='batch'):
         super(EHeavy, self).__init__()
         assert input_size // (2 ** depth) == input_size / (2 ** depth), 'Bad depth for input size'
         self.input_nc = input_nc
