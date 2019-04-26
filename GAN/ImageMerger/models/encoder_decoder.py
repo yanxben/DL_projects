@@ -12,7 +12,7 @@ def custom_pad(kernel, pad):
 
 
 class EncoderBlock(nn.Module):
-    def __init__(self, filters_in, filters_out, kernel=4, stride=2, padding=1, activation=None, normalization='batch', dropout=0.):
+    def __init__(self, filters_in, filters_out, kernel=4, stride=2, padding=1, activation=None, normalization='instance', dropout=0.):
         super(EncoderBlock, self).__init__()
         self.full = nn.Sequential()
         self.full.add_module('conv', nn.Conv2d(filters_in, filters_out, kernel, stride, padding))
@@ -39,7 +39,7 @@ class EncoderBlock(nn.Module):
 
 
 class DecoderBlock(nn.Module):
-    def __init__(self, filters_in, filters_out, kernel=4, stride=2, padding=1, activation=None, normalization='batch', dropout=0.):
+    def __init__(self, filters_in, filters_out, kernel=4, stride=2, padding=1, activation=None, normalization='instance', dropout=0.):
         super(DecoderBlock, self).__init__()
         self.full = nn.Sequential()
         if dropout > 0:
@@ -124,7 +124,7 @@ class E2(nn.Module):
 
 
 class EHeavy(nn.Module):
-    def __init__(self, input_nc, last_conv_nc, input_size, depth, activation='lrelu', dropout=0., pad='reflect'):
+    def __init__(self, input_nc, last_conv_nc, input_size, depth, activation='lrelu', dropout=0., pad='reflect', normalization='instance'):
         super(EHeavy, self).__init__()
         assert input_size // (2 ** depth) == input_size / (2 ** depth), 'Bad depth for input size'
         self.input_nc = input_nc
@@ -137,25 +137,25 @@ class EHeavy(nn.Module):
         self.blocks = nn.ModuleDict()
         self.blocks[str(0)] = nn.Sequential(
             custom_pad(1, pad),
-            EncoderBlock(self.input_nc, 32, kernel=3, stride=1, padding=0, activation=activation, dropout=dropout),
+            EncoderBlock(self.input_nc, 32, kernel=3, stride=1, padding=0, activation=activation, dropout=dropout, normalization=normalization),
             custom_pad(1, pad),
-            EncoderBlock(32, 32, kernel=4, stride=2, padding=0, activation=activation, dropout=dropout)
+            EncoderBlock(32, 32, kernel=4, stride=2, padding=0, activation=activation, dropout=dropout, normalization=normalization)
         )
         for d in range(1, depth-1):
             filters_in = min(last_conv_nc, 32 * (2 ** (d-1)))
             filters_out = min(last_conv_nc, 32 * (2 ** d))
             self.blocks[str(d)] = nn.Sequential(
                 custom_pad(1, pad),
-                EncoderBlock(filters_in, filters_out, kernel=3, stride=1, padding=0, activation=activation, dropout=dropout),
+                EncoderBlock(filters_in, filters_out, kernel=3, stride=1, padding=0, activation=activation, dropout=dropout, normalization=normalization),
                 custom_pad(1, pad),
-                EncoderBlock(filters_out, filters_out, kernel=4, stride=2, padding=0, activation=activation, dropout=dropout)
+                EncoderBlock(filters_out, filters_out, kernel=4, stride=2, padding=0, activation=activation, dropout=dropout, normalization=normalization)
             )
         filters_in = min(last_conv_nc, 32 * (2 ** (depth - 2)))
         self.blocks[str(depth-1)] = nn.Sequential(
             custom_pad(1, pad),
-            EncoderBlock(filters_in, last_conv_nc, kernel=3, stride=1, padding=0, activation=activation, dropout=dropout),
+            EncoderBlock(filters_in, last_conv_nc, kernel=3, stride=1, padding=0, activation=activation, dropout=dropout, normalization=normalization),
             custom_pad(1, pad),
-            EncoderBlock(last_conv_nc, last_conv_nc, kernel=4, stride=2, padding=0, activation=activation, dropout=dropout)
+            EncoderBlock(last_conv_nc, last_conv_nc, kernel=4, stride=2, padding=0, activation=activation, dropout=dropout, normalization=normalization)
         )
 
     def forward(self, x, extract=None):
