@@ -10,45 +10,6 @@ idx = None
 n_idx = 0
 i_idx = 0
 
-# def mask_image(images, path):
-#     def onclick(event):
-#         ix, iy = event.xdata, event.ydata
-#         print('x = {}, y = {}'.format(ix, iy))
-#
-#         global coords, done
-#         coords.append([ix, iy])
-#
-#         plt.scatter(ix, iy, marker='.')
-#
-#         if len(coords) > 1:
-#             plt.plot((ix, coords[-2][0]), (iy, coords[-2][1]), 'b')
-#             if l1_dist([ix, iy], coords[0]) < 1:
-#                 coords.pop()
-#                 done = True
-#
-#         plt.pause(0.001)
-#
-#     fig = plt.figure()
-#
-#     for i in range(images.shape[0]):
-#         # Show image
-#         plt.imshow(images[i])
-#         plt.pause(0.001)
-#         # Collect coordinates
-#         global coords, done
-#         coords = []
-#         done = False
-#
-#         cid = fig.canvas.mpl_connect('button_press_event', onclick)
-#         while not done:
-#             1 + 1
-#
-#         fig.canvas.mpl_disconnect(cid)
-#         plt.cla()
-#
-#         if len(coords) >= 3:
-#             create_mask(images.shape[1:], coords, os.path.join(path, 'image_{}.png'.format(i)))
-
 
 def mask_image(images, path, type):
     def onclick(event):
