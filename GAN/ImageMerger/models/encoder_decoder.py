@@ -12,10 +12,9 @@ def custom_pad(kernel, pad):
 
 
 class EncoderBlock(nn.Module):
-    def __init__(self, filters_in, filters_out, kernel=4, stride=2, padding=1, activation=None, normalization='batch', dropout=0.):
+    def __init__(self, filters_in, filters_out, kernel=4, stride=2, padding=1, activation=None, normalization='instance', dropout=0.):
         super(EncoderBlock, self).__init__()
-        self.full = nn.Sequential()
-        self.full.add_module('conv', nn.Conv2d(filters_in, filters_out, kernel, stride, padding))
+        self.full = nn.Sequential(nn.Conv2d(filters_in, filters_out, kernel, stride, padding))
         if normalization is not None:
             if normalization == 'instance':
                 self.full.add_module('norm', nn.InstanceNorm2d(filters_out))
@@ -39,7 +38,7 @@ class EncoderBlock(nn.Module):
 
 
 class DecoderBlock(nn.Module):
-    def __init__(self, filters_in, filters_out, kernel=4, stride=2, padding=1, activation=None, normalization='batch', dropout=0.):
+    def __init__(self, filters_in, filters_out, kernel=4, stride=2, padding=1, activation=None, normalization='instance', dropout=0.):
         super(DecoderBlock, self).__init__()
         self.full = nn.Sequential()
         if dropout > 0:
@@ -189,9 +188,10 @@ class Decoder(nn.Module):
         self.blocks[str(0)] = DecoderBlock(32, output_nc, activation=None, dropout=dropout)
 
         self.skip = nn.ModuleDict()
-        self.skip[str(0)] = nn.Conv2d(2 * output_nc, output_nc, kernel_size=1)
+        if True or extract is not None and 0 in extract:
+            self.skip[str(0)] = nn.Conv2d(2 * output_nc, output_nc, kernel_size=1)
         for d in reversed(range(1, depth)):
-            if extract is not None and d in extract:
+            if True or extract is not None and d in extract:
                 self.skip[str(d)] = nn.Conv2d(2 * 32 * (2 ** min(4,d-1)), 32 * (2 ** min(4,d-1)), kernel_size=1)
 
         self.tanh = nn.Tanh()
@@ -299,7 +299,7 @@ class TransformerBlock(nn.Module):
 
 
 class Generator(nn.Module):
-    def __init__(self, input_nc, output_nc, e1_conv_nc, e2_conv_nc, last_conv_nc, input_size, depth, preprocess=False, extract=None):
+    def __init__(self, input_nc, output_nc, e1_conv_nc, e2_conv_nc, last_conv_nc, input_size, depth, extract=None):
         super(Generator, self).__init__()
         self.input_nc = input_nc
         self.output_nc = output_nc
@@ -308,7 +308,6 @@ class Generator(nn.Module):
         self.last_conv_nc = last_conv_nc
         self.sep = 0
         self.input_size = input_size
-        self.preprocess = preprocess
         self.extract = extract
 
         self.E_A = E1(self.input_nc, e1_conv_nc, 0, input_size, depth)
@@ -616,7 +615,7 @@ class Discriminator(nn.Module):
         self.input_size = input_size
         self.feature_size = input_size // (2 ** depth)
 
-        self.E = E1(input_nc, last_conv_nc, 0, self.input_size, depth)
+        self.E = E1(input_nc, last_conv_nc, 0, self.input_size, depth, activation='relu')
         self.linear = nn.Linear(last_conv_nc * self.feature_size * self.feature_size, 1)
         #self.activation = nn.Sigmoid()
 

@@ -8,7 +8,6 @@ import numpy as np
 import skimage.io
 import skimage.transform
 import scipy.misc
-import matplotlib.pyplot as plt
 import torch.utils.data
 import torchvision
 

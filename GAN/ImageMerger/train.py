@@ -23,14 +23,13 @@ import os
 import socket
 import time
 from options.train_options import TrainOptions
-from data.data_stl10 import create_dataset_stl10_bird
 from data.data_caltech_ucsd import create_dataset_caltech_ucsd, crop_data
 from models import create_model
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import torch
-#from util.visualizer import Visualizer
+
 
 
 def tensor2im(t):

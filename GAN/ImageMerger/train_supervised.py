@@ -117,7 +117,7 @@ if __name__ == '__main__':
         model.cuda()
         optimizer = optim.Adam(model.parameters(), lr=0.0002)
     if model_mode=='autoencoder':
-        model = GeneratorHeavy(5, 3, 512, 512, 512, imsize, depth=depth, preprocess=False, extract=extract)
+        model = GeneratorHeavy(5, 3, 512, 512, 512, imsize, depth=depth, extract=extract)
         criterion = nn.MSELoss()
         model.cuda()
         optimizer = optim.Adam(model.parameters(), lr=0.0002)
