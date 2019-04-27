@@ -75,7 +75,7 @@ class E1(nn.Module):
     """
     This is the encoder of Image A path.
     """
-    def __init__(self, input_nc, last_conv_nc, sep, input_size, depth, activation='lrelu', dropout=0.):
+    def __init__(self, input_nc, last_conv_nc, sep, input_size, depth, activation='lrelu', dropout=0., normalization='instance'):
         super(E1, self).__init__()
         assert input_size // (2 ** depth) == input_size / (2 ** depth), 'Bad depth for input size'
         self.input_nc = input_nc
@@ -87,10 +87,10 @@ class E1(nn.Module):
         self.bottom_features = (self.last_conv_nc - self.sep) * self.feature_size * self.feature_size
 
         self.blocks = nn.ModuleDict()
-        self.blocks[str(0)] = EncoderBlock(self.input_nc, 32, activation=activation, dropout=dropout)
+        self.blocks[str(0)] = EncoderBlock(self.input_nc, 32, activation=activation, dropout=dropout, normalization=normalization)
         for d in range(1, depth-1):
-            self.blocks[str(d)] = EncoderBlock(32*(2 ** min(4,d-1)), 32*(2 ** min(4,d)), activation=activation, dropout=dropout)
-        self.blocks[str(depth-1)] = EncoderBlock(32 * (2 ** min(4,depth - 2)), last_conv_nc - sep, activation=activation, dropout=dropout)
+            self.blocks[str(d)] = EncoderBlock(32*(2 ** min(4,d-1)), 32*(2 ** min(4,d)), activation=activation, dropout=dropout, normalization=normalization)
+        self.blocks[str(depth-1)] = EncoderBlock(32 * (2 ** min(4,depth - 2)), last_conv_nc - sep, activation=activation, dropout=dropout, normalization=normalization)
 
     def forward(self, x, extract=None):
         x = [x]
@@ -106,7 +106,7 @@ class E2(nn.Module):
     """
     This is the encoder of Image B path.
     """
-    def __init__(self, input_nc, sep, input_size, depth, activation='lrelu', dropout=0.):
+    def __init__(self, input_nc, sep, input_size, depth, activation='lrelu', dropout=0., normalization='instance'):
         super(E2, self).__init__()
         assert input_size // (2 ** depth) == input_size / (2 ** depth), 'Bad depth for input size'
         self.input_nc = input_nc
@@ -117,10 +117,10 @@ class E2(nn.Module):
         self.bottom_features = self.sep * self.feature_size * self.feature_size
 
         self.blocks = nn.ModuleDict()
-        self.blocks[str(0)] = EncoderBlock(self.input_nc, 32, activation=activation, dropout=dropout)
+        self.blocks[str(0)] = EncoderBlock(self.input_nc, 32, activation=activation, dropout=dropout, normalization=normalization)
         for d in range(1, depth-1):
-            self.blocks[str(d)] = EncoderBlock(32 * (2 ** min(3,d - 1)), 32 * (2 ** min(3,d)), activation=activation, dropout=dropout)
-        self.blocks[str(depth-1)] = EncoderBlock(32 * (2 ** min(3,depth - 2)), sep, activation=activation, dropout=dropout)
+            self.blocks[str(d)] = EncoderBlock(32 * (2 ** min(3,d - 1)), 32 * (2 ** min(3,d)), activation=activation, dropout=dropout, normalization=normalization)
+        self.blocks[str(depth-1)] = EncoderBlock(32 * (2 ** min(3,depth - 2)), sep, activation=activation, dropout=dropout, normalization=normalization)
 
     def forward(self, x, extract=None):
         x = [x]
@@ -136,7 +136,7 @@ class EHeavy(nn.Module):
     """
     This is the encoder of Image A and B path for heavy mode.
     """
-    def __init__(self, input_nc, last_conv_nc, input_size, depth, activation='lrelu', dropout=0., pad='reflect', normalization='batch'):
+    def __init__(self, input_nc, last_conv_nc, input_size, depth, activation='lrelu', dropout=0., pad='reflect', normalization='instance'):
         super(EHeavy, self).__init__()
         assert input_size // (2 ** depth) == input_size / (2 ** depth), 'Bad depth for input size'
         self.input_nc = input_nc
@@ -184,7 +184,7 @@ class Decoder(nn.Module):
     """
     This is the decoder of Image C path.
     """
-    def __init__(self, output_nc, last_conv_nc, input_size, depth, activation='relu', dropout=0., extract=None):
+    def __init__(self, output_nc, last_conv_nc, input_size, depth, activation='relu', dropout=0., extract=None, normalization='instance'):
         super(Decoder, self).__init__()
         assert input_size // (2 ** depth) == input_size / (2 ** depth), 'Bad depth for input size'
         self.output_nc = output_nc
@@ -196,10 +196,10 @@ class Decoder(nn.Module):
         self.extract = extract
 
         self.blocks = nn.ModuleDict()
-        self.blocks[str(depth-1)] = DecoderBlock(last_conv_nc, 32 * (2 ** min(4,depth-2)), activation=activation, dropout=dropout)
+        self.blocks[str(depth-1)] = DecoderBlock(last_conv_nc, 32 * (2 ** min(4,depth-2)), activation=activation, dropout=dropout, normalization=normalization)
         for d in reversed(range(1, depth-1)):
-            self.blocks[str(d)] = DecoderBlock(32 * (2 ** min(4,d)), 32 * (2 ** min(4,d-1)), activation=activation, dropout=dropout)
-        self.blocks[str(0)] = DecoderBlock(32, output_nc, activation=None, dropout=dropout)
+            self.blocks[str(d)] = DecoderBlock(32 * (2 ** min(4,d)), 32 * (2 ** min(4,d-1)), activation=activation, dropout=dropout, normalization=normalization)
+        self.blocks[str(0)] = DecoderBlock(32, output_nc, activation=None, dropout=dropout, normalization=normalization)
 
         self.skip = nn.ModuleDict()
         if True or extract is not None and 0 in extract:  # added True since saved model has all the skips
@@ -230,7 +230,7 @@ class DecoderHeavy(nn.Module):
     """
     This is the decoder of Image C path for heavy mode.
     """
-    def __init__(self, output_nc, last_conv_nc, input_size, depth, activation='relu', dropout=0., extract=None, pad='reflect'):
+    def __init__(self, output_nc, last_conv_nc, input_size, depth, activation='relu', dropout=0., extract=None, pad='reflect', normalization='instance'):
         super(DecoderHeavy, self).__init__()
         assert input_size // (2 ** depth) == input_size / (2 ** depth), 'Bad depth for input size'
         self.output_nc = output_nc
@@ -242,25 +242,25 @@ class DecoderHeavy(nn.Module):
         self.blocks = nn.ModuleDict()
         self.blocks[str(depth-1)] = nn.Sequential(
             custom_pad(1, pad),
-            EncoderBlock(last_conv_nc, last_conv_nc, kernel=3, stride=1, padding=0, activation=activation, dropout=dropout),
-            DecoderBlock(last_conv_nc, min(last_conv_nc, 32 * (2 ** (depth-2))), kernel=4, stride=2, padding=1, activation=activation, dropout=dropout)
+            EncoderBlock(last_conv_nc, last_conv_nc, kernel=3, stride=1, padding=0, activation=activation, dropout=dropout, normalization=normalization),
+            DecoderBlock(last_conv_nc, min(last_conv_nc, 32 * (2 ** (depth-2))), kernel=4, stride=2, padding=1, activation=activation, dropout=dropout, normalization=normalization)
         )
         for d in reversed(range(1, depth-1)):
             filters_in = min(last_conv_nc, 32 * (2 ** d))
             filters_out = min(last_conv_nc, 32 * (2 ** (d-1)))
             self.blocks[str(d)] = nn.Sequential(
                 custom_pad(1, pad),
-                EncoderBlock(filters_in, filters_in, kernel=3, stride=1, padding=0, activation=activation, dropout=dropout),
-                DecoderBlock(filters_in, filters_out, kernel=4, stride=2, padding=1, activation=activation, dropout=dropout)
+                EncoderBlock(filters_in, filters_in, kernel=3, stride=1, padding=0, activation=activation, dropout=dropout, normalization=normalization),
+                DecoderBlock(filters_in, filters_out, kernel=4, stride=2, padding=1, activation=activation, dropout=dropout, normalization=normalization)
             )
         self.blocks[str(0)] = nn.Sequential(
             custom_pad(1, pad),
-            EncoderBlock(32, 32, kernel=3, stride=1, padding=0, activation=activation, dropout=dropout),
-            DecoderBlock(32, 32, kernel=4, stride=2, padding=1, activation=activation, dropout=dropout),
+            EncoderBlock(32, 32, kernel=3, stride=1, padding=0, activation=activation, dropout=dropout, normalization=normalization),
+            DecoderBlock(32, 32, kernel=4, stride=2, padding=1, activation=activation, dropout=dropout, normalization=normalization),
             custom_pad(1, pad),
-            EncoderBlock(32, 32, kernel=3, stride=1, padding=0, activation=activation, dropout=dropout),
+            EncoderBlock(32, 32, kernel=3, stride=1, padding=0, activation=activation, dropout=dropout, normalization=normalization),
             custom_pad(1, pad),
-            EncoderBlock(32, output_nc, kernel=3, stride=1, padding=0, activation=None, dropout=dropout)
+            EncoderBlock(32, output_nc, kernel=3, stride=1, padding=0, activation=None, dropout=dropout, normalization=normalization)
         )
 
         self.skip = nn.ModuleDict()
@@ -293,12 +293,12 @@ class TransformerBlock(nn.Module):
     """
     This is the transformer for heavy mode.
     """
-    def __init__(self, filters_in, filters_out, activation):
+    def __init__(self, filters_in, filters_out, activation, normalization='instance'):
         super(TransformerBlock, self).__init__()
 
-        self.block1 = EncoderBlock(filters_in, filters_in, kernel=3, stride=1, padding=1, activation=activation)
-        self.block2 = EncoderBlock(filters_in, filters_in, kernel=3, stride=1, padding=1, activation=activation)
-        self.block3 = EncoderBlock(filters_in, filters_out, kernel=3, stride=1, padding=1, activation=activation)
+        self.block1 = EncoderBlock(filters_in, filters_in, kernel=3, stride=1, padding=1, activation=activation, normalization=normalization)
+        self.block2 = EncoderBlock(filters_in, filters_in, kernel=3, stride=1, padding=1, activation=activation, normalization=normalization)
+        self.block3 = EncoderBlock(filters_in, filters_out, kernel=3, stride=1, padding=1, activation=activation, normalization=normalization)
 
     def forward(self, x):
         o1 = self.block1(x)
@@ -308,7 +308,7 @@ class TransformerBlock(nn.Module):
 
 
 class Generator(nn.Module):
-    def __init__(self, input_nc, output_nc, e1_conv_nc, e2_conv_nc, last_conv_nc, input_size, depth, extract=None):
+    def __init__(self, input_nc, output_nc, e1_conv_nc, e2_conv_nc, last_conv_nc, input_size, depth, extract=None, normalization='instance'):
         super(Generator, self).__init__()
         self.input_nc = input_nc
         self.output_nc = output_nc
@@ -319,9 +319,9 @@ class Generator(nn.Module):
         self.input_size = input_size
         self.extract = extract
 
-        self.E_A = E1(self.input_nc, e1_conv_nc, 0, input_size, depth)
-        self.E_B = E2(self.input_nc, e2_conv_nc, input_size, depth)
-        self.Decoder = Decoder(output_nc, last_conv_nc, input_size, depth, extract=extract)
+        self.E_A = E1(self.input_nc, e1_conv_nc, 0, input_size, depth, normalization=normalization)
+        self.E_B = E2(self.input_nc, e2_conv_nc, input_size, depth, normalization=normalization)
+        self.Decoder = Decoder(output_nc, last_conv_nc, input_size, depth, extract=extract, normalization=normalization)
         self.Merger = nn.Sequential(
             nn.Linear(self.E_A.bottom_features + self.E_B.bottom_features, self.Decoder.bottom_features),
             nn.ReLU(inplace=True)
@@ -382,7 +382,7 @@ class Generator(nn.Module):
 
 
 class GeneratorHeavy(nn.Module):
-    def __init__(self, input_nc, output_nc, e1_conv_nc, e2_conv_nc, last_conv_nc, input_size, depth, extract=None, pad='reflect'):
+    def __init__(self, input_nc, output_nc, e1_conv_nc, e2_conv_nc, last_conv_nc, input_size, depth, extract=None, pad='reflect', normalization='instance'):
         super(GeneratorHeavy, self).__init__()
         self.input_nc = input_nc
         self.output_nc = output_nc
@@ -393,10 +393,10 @@ class GeneratorHeavy(nn.Module):
         self.input_size = input_size
         self.extract = extract
 
-        self.E_A = EHeavy(self.input_nc, e1_conv_nc, input_size, depth, pad=pad)
-        self.E_B = EHeavy(self.input_nc, e2_conv_nc, input_size, depth, pad=pad)
-        self.Decoder = DecoderHeavy(output_nc, last_conv_nc, input_size, depth, extract=extract, pad=pad)
-        self.Merger = TransformerBlock(e1_conv_nc + e2_conv_nc, last_conv_nc, activation='relu')
+        self.E_A = EHeavy(self.input_nc, e1_conv_nc, input_size, depth, pad=pad, normalization=normalization)
+        self.E_B = EHeavy(self.input_nc, e2_conv_nc, input_size, depth, pad=pad, normalization=normalization)
+        self.Decoder = DecoderHeavy(output_nc, last_conv_nc, input_size, depth, extract=extract, pad=pad, normalization=normalization)
+        self.Merger = TransformerBlock(e1_conv_nc + e2_conv_nc, last_conv_nc, activation='relu', normalization=normalization)
 
     def forward(self, x, mask_in, mode=None, use_activation=True):
         N, B, C, H, W = x.shape
@@ -453,7 +453,7 @@ class GeneratorHeavy(nn.Module):
 
 
 class Discriminator(nn.Module):
-    def __init__(self, input_nc, last_conv_nc, input_size, depth):
+    def __init__(self, input_nc, last_conv_nc, input_size, depth, normalization='instance'):
         super(Discriminator, self).__init__()
         assert input_size // (2 ** depth) == input_size / (2 ** depth), 'Bad depth for input size'
         self.input_nc = input_nc
@@ -461,7 +461,7 @@ class Discriminator(nn.Module):
         self.input_size = input_size
         self.feature_size = input_size // (2 ** depth)
 
-        self.E = E1(input_nc, last_conv_nc, 0, self.input_size, depth, activation='relu')
+        self.E = E1(input_nc, last_conv_nc, 0, self.input_size, depth, activation='relu', normalization=normalization)
         self.linear = nn.Linear(last_conv_nc * self.feature_size * self.feature_size, 1)
 
     def forward(self, x):
@@ -471,7 +471,7 @@ class Discriminator(nn.Module):
 
 
 class DiscriminatorReID(nn.Module):
-    def __init__(self, input_nc, last_conv_nc, input_size, depth, out_features=512, dropout=0.1):
+    def __init__(self, input_nc, last_conv_nc, input_size, depth, out_features=512, dropout=0.1, normalization='instance'):
         super(DiscriminatorReID, self).__init__()
         assert input_size // (2 ** depth) == input_size / (2 ** depth), 'Bad depth for input size'
         self.input_nc = input_nc
@@ -480,7 +480,7 @@ class DiscriminatorReID(nn.Module):
         self.feature_size = input_size // (2 ** depth)
         self.out_features = out_features
 
-        self.E = E1(input_nc, last_conv_nc, 0, self.input_size, depth, activation='relu', dropout=dropout)
+        self.E = E1(input_nc, last_conv_nc, 0, self.input_size, depth, activation='relu', dropout=dropout, normalization=normalization)
         self.dropout = nn.Dropout2d(p=dropout)
         self.avg_pool = nn.AvgPool2d(self.feature_size)
         self.linear1 = nn.Linear(last_conv_nc, out_features)
@@ -509,11 +509,11 @@ class Classifier200(nn.Module):
         self.linear1 = nn.Linear(last_conv_nc * self.feature_size * self.feature_size, 1024)
         self.relu = nn.ReLU
         self.linear2 = nn.Linear(1024, 200)
-        #self.softmax = nn.Softmax()
+        self.softmax = nn.Softmax()
 
     def forward(self, x):
         x = self.E(x)
         x = self.relu(x)
         x = self.linear2(x)
-        #x = self.softmax(x)
+        x = self.softmax(x)
         return x
