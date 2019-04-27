@@ -21,16 +21,12 @@ See frequently asked questions at: https://github.com/junyanz/pytorch-CycleGAN-a
 
 import os
 import socket
-import time
 
-import matplotlib
 import matplotlib.pyplot as plt
 import torch
-from torch import optim
-from torch import nn
 
-from models.encoder_decoder import DiscriminatorReID, DiscriminatorTriplet, Classifier200, Generator, GeneratorHeavy, AutoEncoder2, EHeavy, DecoderHeavy
-from data.data_caltech_ucsd import create_dataset_caltech_ucsd, crop_data
+from models.encoder_decoder import Generator
+from data.data_caltech_ucsd import create_dataset_caltech_ucsd
 from models.utils_save import load_model
 
 

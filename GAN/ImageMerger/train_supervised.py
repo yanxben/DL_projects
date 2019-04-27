@@ -29,7 +29,7 @@ import torch
 from torch import optim
 from torch import nn
 
-from models.encoder_decoder import DiscriminatorReID, DiscriminatorTriplet, Classifier200, Generator, GeneratorHeavy, AutoEncoder2, EHeavy, DecoderHeavy
+from models.encoder_decoder import DiscriminatorReID, Classifier200, Generator, GeneratorHeavy, EHeavy, DecoderHeavy
 from data.data_caltech_ucsd import create_dataset_caltech_ucsd, crop_data
 from models.utils_save import save_model
 
