@@ -63,7 +63,7 @@ load_filename4 = 'net_Gen_save_3_epoch_430.pth.tar'
 
 def run(model, images):
 
-    mask = images[:, :, C - 1, :, :].view([-1, 2, 1, H, W])
+    mask = images[:, :, C - 1, :, :].unsqueeze(2).view([-1, 2, 1, H, W])
     images = images[:, :, :C - 1, :, :].view([-1, 2, C - 1, H, W])
     images = im2tensor(images)
 
@@ -128,18 +128,29 @@ if __name__ == '__main__':
     print('End of initialization.')
 
     _, C, H, W = testset['images'].shape
-    for i in range(testlen):
-        images = torch.zeros([testlen, 2, C, H, W])
-        images[:, 0] = testset['images'][i].unsqueeze(0).expand(testlen, C, H, W)
-        images[:, 1] = torch.cat([testset['images'][j].unsqueeze(0) for j in range(testlen)], dim=0)
+    # for i in range(testlen):
+    #     images = torch.zeros([testlen, 2, C, H, W])
+    #     images[:, 0] = testset['images'][i].unsqueeze(0).expand(testlen, C, H, W)
+    #     images[:, 1] = torch.cat([testset['images'][j].unsqueeze(0) for j in range(testlen)], dim=0)
+    #
+    #     plt.figure('test1')
+    #     run(model1, images)
+    #     plt.figure('test2')
+    #     run(model2, images)
+    #     plt.figure('test3')
+    #     run(model3, images)
+    #     plt.figure('test4')
+    #     run(model4, images)
 
-        plt.figure('test1')
-        run(model1, images)
-        plt.figure('test2')
-        run(model2, images)
-        plt.figure('test3')
-        run(model3, images)
-        plt.figure('test4')
-        run(model4, images)
+    images = testset['images'].view(-1, 2, C, H, W)
+
+    plt.figure('test1')
+    run(model1, images)
+    plt.figure('test2')
+    run(model2, images)
+    plt.figure('test3')
+    run(model3, images)
+    plt.figure('test4')
+    run(model4, images)
 
     print('DONE')

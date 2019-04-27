@@ -72,8 +72,7 @@ if __name__ == '__main__':
         plot = False
         caltech_path = '/home/' + os.getlogin() + '/Datasets/Caltech-UCSD-Birds-200'
     _, caltech_data, caltech_meta, testset = create_dataset_caltech_ucsd(caltech_path, batch_size, size=None, imsize=imsize, mode=data_mode, testset=testset)  # create a dataset given opt.dataset_mode and other options
-    #dataset_size = len(dataset)    # get the number of images in the dataset.
-    #print('The number of training epochs = %d' % dataset_size)
+
     caltech_labels = caltech_meta['labels']
     caltech_bboxes = caltech_meta['bboxes']
     print('The number of training images = %d' % caltech_data.shape[0])
@@ -110,19 +109,18 @@ if __name__ == '__main__':
         criterion = nn.CrossEntropyLoss()
         model.cuda()
         optimizer = optim.Adam(model.parameters(), lr=0.0002)
-    if model_mode=='re-identification':
+    if model_mode == 're-identification':
         caltech_data = caltech_data.type(torch.FloatTensor)
         model = DiscriminatorReID(caltech_data.shape[1] - 1, 512, imsize, depth=depth, out_features=64, dropout=0.1)
         criterion = nn.TripletMarginLoss()
         model.cuda()
         optimizer = optim.Adam(model.parameters(), lr=0.0002)
-    if model_mode=='autoencoder':
+    if model_mode == 'autoencoder':
         model = GeneratorHeavy(5, 3, 512, 512, 512, imsize, depth=depth, extract=extract)
         criterion = nn.MSELoss()
         model.cuda()
         optimizer = optim.Adam(model.parameters(), lr=0.0002)
-    if model_mode=='encoderdecoder':
-        #model = GeneratorHeavy(5, 3, 512, 512, 512, imsize, depth=depth, preprocess=False, extract=extract)
+    if model_mode == 'encoderdecoder':
         encoder = EHeavy(5, 512, imsize, depth=depth)
         decoder = DecoderHeavy(3, 512, imsize, depth=depth, extract=extract)
         criterion = nn.L1Loss()
@@ -257,10 +255,8 @@ if __name__ == '__main__':
                     batch_n = torch.zeros_like(validationset)
                     for k in range(validationsize):
                         label_a = int(caltech_labels[validationset[k]])
-                        # indices = (caltech_labels == label_a).nonzero()
                         indices = label_dict[label_a][1]
                         batch_p[k] = indices[torch.randint(indices.numel(), (1,))]
-                        # indices = (caltech_labels != label_a).nonzero()
                         indices = label_dict[label_a][0]
                         batch_n[k] = indices[torch.randint(indices.numel(), (1,))]
 
