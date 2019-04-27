@@ -15,34 +15,14 @@ def im2tensor(i):
 
 class mergeganmodel(BaseModel):
     """
-    This class implements the CycleGAN model, for learning image-to-image translation without paired data.
-
-    The model training requires '--dataset_mode unaligned' dataset.
-    By default, it uses a '--netG resnet_9blocks' ResNet generator,
-    a '--netD basic' discriminator (PatchGAN introduced by pix2pix),
-    and a least-square GANs objective ('--gan_mode lsgan').
-
-    CycleGAN paper: https://arxiv.org/pdf/1703.10593.pdf
+    This class implements the MergeGAN model.
+    It builds the generator and discriminators.
+    It preprocesses the data and performs forward and backward passes.
     """
     @staticmethod
     def modify_commandline_options(parser, is_train=True):
-        """Add new dataset-specific options, and rewrite default values for existing options.
-
-        Parameters:
-            parser          -- original option parser
-            is_train (bool) -- whether training phase or test phase. You can use this flag to add training-specific or test-specific options.
-
-        Returns:
-            the modified parser.
-
-        For CycleGAN, in addition to GAN losses, we introduce lambda_A, lambda_B, and lambda_identity for the following losses.
-        A (source domain), B (target domain).
-        Generators: G_A: A -> B; G_B: B -> A.
-        Discriminators: D_A: G_A(A) vs. B; D_B: G_B(B) vs. A.
-        Forward cycle loss:  lambda_A * ||G_B(G_A(A)) - A|| (Eqn. (2) in the paper)
-        Backward cycle loss: lambda_B * ||G_A(G_B(B)) - B|| (Eqn. (2) in the paper)
-        Identity loss (optional): lambda_identity * (||G_A(B) - B|| * lambda_B + ||G_B(A) - A|| * lambda_A) (Sec 5.2 "Photo generation from paintings" in the paper)
-        Dropout is not used in the original CycleGAN paper.
+        """
+        Add new dataset-specific options, and rewrite default values for existing options.
         """
         parser.set_defaults(no_dropout=True)  # default CycleGAN did not use dropout
         if is_train:
@@ -56,6 +36,7 @@ class mergeganmodel(BaseModel):
             parser.add_argument('--reid_features', type=int, default=64, help='')
             parser.add_argument('--reid_freq', type=int, default=1, help='')
             parser.add_argument('--pad', type=str, default='reflect', help='mode of padding zero/reflect')
+            parser.add_argument('--normalization', type=str, default='instance', help='instance normalization or batch normalization [instance | batch | none]')
 
             parser.add_argument('--no_background', dest='background', action='store_false', help='use background')
             parser.add_argument('--attention', dest='attention', action='store_true', help='use attention layer')
@@ -66,30 +47,21 @@ class mergeganmodel(BaseModel):
             parser.add_argument('--ReID_mean', dest='ReID_mean', action='store_true', help='compare ReID on class mean')
 
             parser.add_argument('--lambda_G1', type=float, default=0.5,
-                                help='weight for cycle loss (A -> B -> A)')
+                                help='weight for recreation loss1')
             parser.add_argument('--lambda_G2', type=float, default=0.5,
-                                help='weight for cycle loss (B -> A -> B)')
+                                help='weight for recreation loss2')
             parser.add_argument('--lambda_Background', type=float, default=1.0,
-                                help='use background mapping. Setting lambda_identity other than 0 has an effect of scaling the weight of the identity mapping loss. For example, if the weight of the identity loss should be 10 times smaller than the weight of the reconstruction loss, please set lambda_identity = 0.1')
-            parser.add_argument('--lambda_Identity', type=float, default=0.05,
-                                help='use identity mapping. Setting lambda_identity other than 0 has an effect of scaling the weight of the identity mapping loss. For example, if the weight of the identity loss should be 10 times smaller than the weight of the reconstruction loss, please set lambda_identity = 0.1')
-            parser.add_argument('--lambda_Disc', type=float, default=0.5,
+                                help='use background mapping')
+            parser.add_argument('--lambda_Disc', type=float, default=0.2,
                                 help='lambda for Disc loss of Generator')
-            parser.add_argument('--lambda_ReID', type=float, default=0.5,
+            parser.add_argument('--lambda_ReID', type=float, default=0.2,
                                 help='lambda for ReID loss of Generator')
 
             parser.add_argument('--no_preprocess', dest='preprocess_mask', action='store_false',
                                 help='use preprocessing on mask')
             parser.add_argument('--preprocess_flip', action='store_false',
                                 help='use preprocessing horizontal flip')
-            parser.add_argument('--preprocess_shift', action='store_true',
-                                help='use preprocessing shifting')
-            parser.add_argument('--preprocess_rotate', action='store_true',
-                                help='use preprocessing rotation')
-            parser.add_argument('--preprocess_permute', action='store_true',
-                                help='use preprocessing color permutation')
-            parser.add_argument('--preprocess_jitter', action='store_true',
-                                help='use preprocessing color jitter')
+
         return parser
 
     def __init__(self, opt):
@@ -120,21 +92,22 @@ class mergeganmodel(BaseModel):
         # Define networks (both Generators and discriminators)
         self.A = 0
         self.B = 1
-
         # Define Generator
         if self.opt.model_config == 'light':
             self.netGen = encoder_decoder.Generator(opt.input_nc + (2 if opt.background else 0), opt.input_nc,
                                                     opt.e1_conv_nc, opt.e2_conv_nc, opt.last_conv_nc, opt.input_size,
-                                                    opt.depth, extract=[1, 3, opt.depth]).to(self.device)
+                                                    opt.depth, extract=[1, 3, opt.depth], normalization=opt.normalization).to(self.device)
         elif self.opt.model_config == 'heavy':
             self.netGen = encoder_decoder.GeneratorHeavy(opt.input_nc + (2 if opt.background else 0), opt.input_nc,
                                                     opt.e1_conv_nc, opt.e2_conv_nc, opt.last_conv_nc, opt.input_size,
-                                                    opt.depth, extract=[2, opt.depth], pad=opt.pad).to(self.device)
+                                                    opt.depth, extract=[2, opt.depth], pad=opt.pad, normalization=opt.normalization).to(self.device)
 
         # Define Discriminators
         if self.isTrain:
-            self.netDisc = encoder_decoder.Discriminator(opt.input_nc, opt.last_conv_nc, opt.input_size, opt.depth).to(self.device)
-            self.netReID = encoder_decoder.DiscriminatorReID(opt.input_nc, opt.last_conv_nc, opt.input_size, opt.depth, out_features=opt.reid_features).to(self.device)
+            self.netDisc = encoder_decoder.Discriminator(opt.input_nc, opt.last_conv_nc, opt.input_size, opt.depth,
+                                                         normalization=opt.normalization).to(self.device)
+            self.netReID = encoder_decoder.DiscriminatorReID(opt.input_nc, opt.last_conv_nc, opt.input_size, opt.depth,
+                                                             out_features=opt.reid_features, normalization=opt.normalization).to(self.device)
             if opt.ReID_mean:
                 self.real_a_embed_mean = dict()
                 for i in range(1, 201):
@@ -158,13 +131,11 @@ class mergeganmodel(BaseModel):
         if self.opt.load:
             self.load_networks(self.opt.load_dir, self.opt.load_suffix)
 
-    def set_input(self, model_input, input_mode, load=False):
+    def set_input(self, model_input):
         """Unpack input data from the dataloader and perform necessary pre-processing steps.
 
         Parameters:
-            input (dict): include the data itself and its metadata information.
-
-        The option 'direction' can be used to swap domain A and domain B.
+            model_input (dict): include the data itself and its metadata information.
         """
         # We separate the train domain to 2 groups.
         # Real_G are training images for the generator.
@@ -193,108 +164,59 @@ class mergeganmodel(BaseModel):
                 self.mask_n = model_input['mask_n'].clone()  # negative images for ReID
                 self.mask_n = self.mask_n.expand_as(self.real_n)
 
-        self.input_mode = input_mode
-        #if self.input_mode == 'mix':
-        #    self.mask_G = self.mask_G.reshape(-1, 2, C1, H1, W1)
-        #    self.real_G = self.real_G.reshape(-1, 2, C1, H1, W1)
-        if self.input_mode == 'reflection':
-            self.mask_G = self.mask_G.expand(N1, 2, C1, H1, W1)
-            self.real_G = self.real_G.unsqueeze(1).expand(N1, 2, C1, H1, W1)
-
         if self.opt.preprocess_mask:
-            self.preprocess(load=load)
-            self.real_G_ref = im2tensor(self.real_G_ref)
-            if load:
-                self.real_G_ref = self.real_G_ref.to(self.device)
+            self.preprocess()
 
         # To device
         self.real_G = im2tensor(self.real_G)
         self.real_D = im2tensor(self.real_D)
         self.real_a = im2tensor(self.real_a)
         self.real_n = im2tensor(self.real_n)
-        if load:
-            self.real_G = self.real_G.to(self.device)
-            self.real_D = self.real_D.to(self.device)
-            self.real_a = self.real_a.to(self.device)
-            self.real_n = self.real_n.to(self.device)
-            if self.opt.background:
-                if not self.opt.attention:
-                    self.mask_G = self.mask_G.to(self.device)
-                    self.mask_D = self.mask_D.to(self.device)
-                    self.mask_a = self.mask_a.to(self.device)
-                    self.mask_n = self.mask_n.to(self.device)
 
-    def preprocess(self, opt=None, load=False):
+        self.real_G = self.real_G.to(self.device)
+        self.real_D = self.real_D.to(self.device)
+        self.real_a = self.real_a.to(self.device)
+        self.real_n = self.real_n.to(self.device)
+        if self.opt.background:
+            if not self.opt.attention:
+                self.mask_G = self.mask_G.to(self.device)
+                self.mask_D = self.mask_D.to(self.device)
+                self.mask_a = self.mask_a.to(self.device)
+                self.mask_n = self.mask_n.to(self.device)
+
+    def preprocess(self):
         # This function preprocesses the inputs with augmentation.
         # 1. Horizontal flip
-        # 2. Shift
-        # 3. Rotate
-        # 4. Permute colors
-        # 5. brightness, Contrast
-
-        if opt is None:
-            opt = self.opt
+        # 2. Shift - Done outside
+        # 3. Rotate - Not implemented
+        # 4. Permute colors - Not implemented
+        # 5. brightness, Contrast - Not implemented
 
         N1, B1, C1, H1, W1 = self.real_G.shape
         N2, C2, H2, W2 = self.real_D.shape
         N3, C3, H3, W3 = self.real_a.shape
         # 1. Flip
-        if opt.preprocess_flip:
+        if self.opt.preprocess_flip:
             flip = torch.randint(2, (N1, B1, 1, 1, 1)).expand_as(self.real_G)
-            if not load: flip = flip.to(self.device)
             self.real_G = torch.where(flip == 1, self.real_G.flip(4), self.real_G)
             self.mask_G = torch.where(flip == 1, self.mask_G.flip(4), self.mask_G)
             flip = torch.randint(2, (N2,1, 1, 1)).expand_as(self.real_D)
-            if not load: flip = flip.to(self.device)
             self.real_D = torch.where(flip == 1, self.real_D.flip(3), self.real_D)
             self.mask_D = torch.where(flip == 1, self.mask_D.flip(3), self.mask_D)
             flip = torch.randint(2, (N3, 1, 1, 1)).expand_as(self.real_a)
-            if not load: flip = flip.to(self.device)
             self.real_a = torch.where(flip == 1, self.real_a.flip(3), self.real_a)
             self.mask_a = torch.where(flip == 1, self.mask_a.flip(3), self.mask_a)
             flip = torch.randint(2, (N3, 1, 1, 1)).expand_as(self.real_a)
-            if not load: flip = flip.to(self.device)
             self.real_n = torch.where(flip == 1, self.real_n.flip(3), self.real_n)
             self.mask_n = torch.where(flip == 1, self.mask_n.flip(3), self.mask_n)
-
-        # 2. Shift - is done outside of model (before input)
-        # 3. Rotate - unused, will also be done outside of model
 
         self.mask_G = torch.where(self.mask_G >= 0.5, torch.ones_like(self.mask_G), torch.zeros_like(self.mask_G))
         self.mask_D = torch.where(self.mask_D >= 0.5, torch.ones_like(self.mask_D), torch.zeros_like(self.mask_D))
         self.mask_a = torch.where(self.mask_a >= 0.5, torch.ones_like(self.mask_a), torch.zeros_like(self.mask_a))
         self.mask_n = torch.where(self.mask_n >= 0.5, torch.ones_like(self.mask_n), torch.zeros_like(self.mask_n))
 
-        self.real_G_ref = self.real_G.clone()
-        #self.real_D_ref = self.real_D.clone()
-
-        # 4. Permute colors
-        if opt.preprocess_permute:
-            permute1 = torch.randint(10, (N1, B1)) >= 5
-            if not load: permute1 = permute1.to(self.device)
-            permute2 = torch.randint(10, (N1, B1)) >= 5
-            if not load: permute2 = permute2.to(self.device)
-            permute3 = torch.randint(10, (N1, B1)) >= 5
-            if not load: permute3 = permute3.to(self.device)
-            self.real_G[permute1] = torch.where(self.mask_G[permute1] >= .5, self.real_G[permute1][:,  (1, 2, 0), :, :], self.real_G[permute1])
-            self.real_G[permute2] = torch.where(self.mask_G[permute2] >= .5, self.real_G[permute2][:,  (0, 2, 1), :, :], self.real_G[permute2])
-            self.real_G[permute3] = torch.where(self.mask_G[permute3] >= .5, self.real_G[permute3][:,  (2, 1, 0), :, :], self.real_G[permute3])
-            self.real_G_ref[permute1.flip(1)] = torch.where(self.mask_G[permute1.flip(1)] >= .5, self.real_G_ref[permute1.flip(1)][:, (1, 2, 0), :, :], self.real_G_ref[permute1.flip(1)])
-            self.real_G_ref[permute2.flip(1)] = torch.where(self.mask_G[permute2.flip(1)] >= .5, self.real_G_ref[permute2.flip(1)][:, (0, 2, 1), :, :], self.real_G_ref[permute2.flip(1)])
-            self.real_G_ref[permute3.flip(1)] = torch.where(self.mask_G[permute3.flip(1)] >= .5, self.real_G_ref[permute3.flip(1)][:, (2, 1, 0), :, :], self.real_G_ref[permute3.flip(1)])
-
-            permute1 = torch.randint(10, (N2,)) >= 5
-            if not load: permute1 = permute1.to(self.device)
-            permute2 = torch.randint(10, (N2,)) >= 5
-            if not load: permute2 = permute2.to(self.device)
-            permute3 = torch.randint(10, (N2,)) >= 5
-            if not load: permute3 = permute3.to(self.device)
-            self.real_D[permute1] = torch.where(self.mask_D[permute1] >= .5, self.real_D[permute1][:, (1, 2, 0), :, :], self.real_D[permute1])
-            self.real_D[permute2] = torch.where(self.mask_D[permute2] >= .5, self.real_D[permute2][:, (1, 2, 0), :, :], self.real_D[permute2])
-            self.real_D[permute3] = torch.where(self.mask_D[permute3] >= .5, self.real_D[permute3][:, (1, 2, 0), :, :], self.real_D[permute3])
-
     def forward(self):
-        """Run forward pass; called by both functions <optimize_parameters> and <test>."""
+        """Run forward pass; called by <optimize_parameters>."""
         if self.opt.background:
             if self.opt.attention:
                 self.fake_G, self.mask_G = self.netGen(self.real_G, mask_out=True)  # G(A)
@@ -310,42 +232,24 @@ class mergeganmodel(BaseModel):
             self.rec_G_1 = self.netGen(self.fake_G)  # G(G(A))
 
         # Recreate original images from fake image and real image as second
-        if self.input_mode == 'mix':
-            if self.opt.background and not self.opt.attention:
-                self.rec_G_2A = self.netGen(
-                    torch.cat((self.fake_G[:, self.A, :, :, :].unsqueeze(1), self.real_G[:, self.A, :, :, :].unsqueeze(1)), dim=1),
-                    mask_in=self.mask_G[:, self.A, :, :, :], mode=self.A)  # G(G(A))
-                self.rec_G_2B = self.netGen(
-                    torch.cat((self.real_G[:, self.B, :, :, :].unsqueeze(1), self.fake_G[:, self.B, :, :, :].unsqueeze(1)), dim=1),
-                    mask_in=self.mask_G[:, self.B, :, :, :], mode=self.B)  # G(G(A))
-            else:
-                self.rec_G_2A = self.netGen(
-                    torch.cat((self.fake_G[:, self.A, :, :, :].unsqueeze(1), self.real_G[:, self.A, :, :, :].unsqueeze(1).flip(4)), dim=1),
-                    mode=self.A)  # G(G(A))
-                self.rec_G_2B = self.netGen(
-                    torch.cat((self.real_G[:, self.B, :, :, :].unsqueeze(1).flip(4), self.fake_G[:, self.B, :, :, :].unsqueeze(1)), dim=1),
-                    mode=self.B)  # G(G(A))
-
-        # Use identity constraint for same image in both inputs
-        # if self.input_mode == 'reflection'
-        #     if self.opt.lambda_Identity > 0:
-        #         N, _, C, H, W = self.real_G.shape
-        #         self.iden_G = self.netG(
-        #             self.real_G.reshape(2*N, 1, C, H, W).expand(2*N, 2, C, H, W),
-        #             mask_in=self.mask_G.reshape(2*N, C, H, W),
-        #             mode=self.A
-        #         )
+        if self.opt.background and not self.opt.attention:
+            self.rec_G_2A = self.netGen(
+                torch.cat((self.fake_G[:, self.A, :, :, :].unsqueeze(1), self.real_G[:, self.A, :, :, :].unsqueeze(1)), dim=1),
+                mask_in=self.mask_G[:, self.A, :, :, :], mode=self.A)  # G(G(A))
+            self.rec_G_2B = self.netGen(
+                torch.cat((self.real_G[:, self.B, :, :, :].unsqueeze(1), self.fake_G[:, self.B, :, :, :].unsqueeze(1)), dim=1),
+                mask_in=self.mask_G[:, self.B, :, :, :], mode=self.B)  # G(G(A))
+        else:
+            self.rec_G_2A = self.netGen(
+                torch.cat((self.fake_G[:, self.A, :, :, :].unsqueeze(1), self.real_G[:, self.A, :, :, :].unsqueeze(1).flip(4)), dim=1),
+                mode=self.A)  # G(G(A))
+            self.rec_G_2B = self.netGen(
+                torch.cat((self.real_G[:, self.B, :, :, :].unsqueeze(1).flip(4), self.fake_G[:, self.B, :, :, :].unsqueeze(1)), dim=1),
+                mode=self.B)  # G(G(A))
 
     def optimize_D(self):
-        """Calculate GAN loss for the discriminator
-
-        Parameters:
-            netD (network)      -- the discriminator D
-            real (tensor array) -- real images
-            fake (tensor array) -- images generated by a generator
-
-        Return the discriminator loss.
-        We also call loss_D.backward() to calculate the gradients.
+        """
+        Calculate GAN + ReID loss for the discriminators and performs weight updata.
         """
         self.optimizer_Disc.zero_grad()     # set D gradients to zero
         self.optimizer_ReID.zero_grad()     # set D gradients to zero
@@ -370,10 +274,8 @@ class mergeganmodel(BaseModel):
             if self.opt.mask_ReID:
                 if self.opt.mask_ReID_zero:
                     real_a_embed = self.netReID(torch.where(self.mask_a >= .5, self.real_a, torch.zeros_like(self.real_a)))
-                    # real_p_embed = self.netReID(self.real_G[:,self.B])
                     real_p_embed = self.netReID(torch.where(self.mask_G[:, self.B] >= .5, self.real_G[:, self.B], torch.zeros_like(self.real_G[:, self.B])))
                     real_n_embed = self.netReID(torch.where(self.mask_n >= .5, self.real_n, torch.zeros_like(self.real_n)))
-                    # fake_p_embed = self.netReID(self.fake_G[:, self.A].detach())
                     fake_p_embed = self.netReID(torch.where(self.mask_G[:, self.A] >= .5, self.fake_G[:, self.A].detach(), torch.zeros_like(self.fake_G[:, self.A])))
                 else:
                     real_a_embed = self.netReID(self.real_a)
@@ -400,7 +302,9 @@ class mergeganmodel(BaseModel):
             self.optimizer_ReID.step()      # update ReID weights
 
     def optimize_G(self, reid=True):
-        """Calculate the loss for generator G"""
+        """
+        Calculate the loss for generator G
+        """
         _, _, C, H, W = self.fake_G.shape
 
         # GAN loss D(G(A,B))
@@ -415,18 +319,15 @@ class mergeganmodel(BaseModel):
             if self.opt.mask_ReID:
                 if self.opt.mask_ReID_zero:
                     real_a_embed = self.netReID(torch.where(self.mask_a >= .5, self.real_a, torch.zeros_like(self.real_a)))
-                    #real_p_embed = self.netReID(torch.where(self.mask_G[:,self.B] >= .5, self.real_G[:,self.B], torch.zeros_like(self.real_G[:,self.B])))
                     fake_p_embed = self.netReID(torch.where(self.mask_G[:,self.A] >= .5, self.fake_G[:,self.A], torch.zeros_like(self.fake_G[:,self.A])))
                 else:
                     real_a_embed = self.netReID(self.real_a)
-                    #real_p_embed = self.netReID(self.real_G[:, self.B])
                     fake_p_embed = self.netReID(torch.where(self.mask_G[:, self.A] >= .5, self.fake_G[:, self.A], self.real_G[:, self.A]))
             else:
                 real_a_embed = self.netReID(self.real_a)
-                #real_p_embed = self.netReID(self.real_G[:, self.B])
                 fake_p_embed = self.netReID(self.fake_G[:,self.A])
 
-            if self.opt.ReID_mean:
+            if self.opt.ReID_mean:  # compare the encoding to the mean of the class instead of only the anchor
                 for i in range(real_a_embed.shape[0]):
                     self.real_a_embed_mean[int(self.real_a_labels[i])] = 0.7*self.real_a_embed_mean[int(self.real_a_labels[i])] + 0.3*real_a_embed[i].detach()
                 for i in range(real_a_embed.shape[0]):
@@ -452,21 +353,12 @@ class mergeganmodel(BaseModel):
             self.loss_G_background = 0
 
         # Forward cycle loss || G(G(A)) - A||
-        if self.input_mode == 'mix':
-            self.loss_cycle_1 = self.criterionCycle(self.rec_G_1, self.real_G) * self.opt.lambda_G1
-            self.loss_cycle_2A = self.criterionCycle(self.rec_G_2A, self.real_G[:, self.A, :, :, :]) * self.opt.lambda_G2
-            self.loss_cycle_2B = self.criterionCycle(self.rec_G_2B, self.real_G[:, self.B, :, :, :]) * self.opt.lambda_G2
-
-        # Identity
-        # if self.input_mode == 'reflection':
-        #     if self.opt.lambda_Identity > 0:
-        #         self.loss_identity = self.criterionCycle(self.real_G_ref, self.fake_G) * self.opt.lambda_Identity
+        self.loss_cycle_1 = self.criterionCycle(self.rec_G_1, self.real_G) * self.opt.lambda_G1
+        self.loss_cycle_2A = self.criterionCycle(self.rec_G_2A, self.real_G[:, self.A, :, :, :]) * self.opt.lambda_G2
+        self.loss_cycle_2B = self.criterionCycle(self.rec_G_2B, self.real_G[:, self.B, :, :, :]) * self.opt.lambda_G2
 
         # combined loss and calculate gradients
-        if self.input_mode == 'mix':
-            self.loss_G = self.loss_GDisc + self.loss_GReID + self.loss_G_background + self.loss_cycle_1 + self.loss_cycle_2A + self.loss_cycle_2B
-        # elif self.input_mode == 'reflection':
-        #     self.loss_G = self.loss_GDisc + self.loss_GReID + self.loss_G_background + self.loss_identity
+        self.loss_G = self.loss_GDisc + self.loss_GReID + self.loss_G_background + self.loss_cycle_1 + self.loss_cycle_2A + self.loss_cycle_2B
         self.optimizer_Gen.zero_grad()  # set G gradients to zero
         self.loss_G.backward()
         self.optimizer_Gen.step()  # update G weights

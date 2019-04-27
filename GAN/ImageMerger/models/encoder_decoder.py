@@ -12,6 +12,10 @@ def custom_pad(kernel, pad):
 
 
 class EncoderBlock(nn.Module):
+    """
+    This is class is a block in the pipe of the encoder.
+    It has conv2d -> Normalization (optional) -> activation (optional) -> dropout (optional)
+    """
     def __init__(self, filters_in, filters_out, kernel=4, stride=2, padding=1, activation=None, normalization='instance', dropout=0.):
         super(EncoderBlock, self).__init__()
         self.full = nn.Sequential(nn.Conv2d(filters_in, filters_out, kernel, stride, padding))
@@ -38,6 +42,10 @@ class EncoderBlock(nn.Module):
 
 
 class DecoderBlock(nn.Module):
+    """
+    This is class is a block in the pipe of the decoder.
+    It has dropout (optional) -> conv2d -> Normalization (optional) -> activation (optional)
+    """
     def __init__(self, filters_in, filters_out, kernel=4, stride=2, padding=1, activation=None, normalization='instance', dropout=0.):
         super(DecoderBlock, self).__init__()
         self.full = nn.Sequential()
@@ -64,6 +72,9 @@ class DecoderBlock(nn.Module):
 
 
 class E1(nn.Module):
+    """
+    This is the encoder of Image A path.
+    """
     def __init__(self, input_nc, last_conv_nc, sep, input_size, depth, activation='lrelu', dropout=0.):
         super(E1, self).__init__()
         assert input_size // (2 ** depth) == input_size / (2 ** depth), 'Bad depth for input size'
@@ -85,15 +96,16 @@ class E1(nn.Module):
         x = [x]
         for d in range(self.depth):
             x.append(self.blocks[str(d)](x[-1]))
-            # print(x[-1].shape)
 
-        #x[self.depth] = x[self.depth].view(-1, self.bottom_features)
         if extract is None:
             return x[self.depth]
         return [x[d] if d in extract else None for d in range(self.depth + 1)]
 
 
 class E2(nn.Module):
+    """
+    This is the encoder of Image B path.
+    """
     def __init__(self, input_nc, sep, input_size, depth, activation='lrelu', dropout=0.):
         super(E2, self).__init__()
         assert input_size // (2 ** depth) == input_size / (2 ** depth), 'Bad depth for input size'
@@ -114,15 +126,16 @@ class E2(nn.Module):
         x = [x]
         for d in range(self.depth):
             x.append(self.blocks[str(d)](x[-1]))
-            # print(x[-1].shape)
 
-        #x[self.depth] = x[self.depth].view(-1, self.bottom_features)
         if extract is None:
             return x[self.depth]
         return [x[d] if d in extract else None for d in range(self.depth+1)]
 
 
 class EHeavy(nn.Module):
+    """
+    This is the encoder of Image A and B path for heavy mode.
+    """
     def __init__(self, input_nc, last_conv_nc, input_size, depth, activation='lrelu', dropout=0., pad='reflect', normalization='batch'):
         super(EHeavy, self).__init__()
         assert input_size // (2 ** depth) == input_size / (2 ** depth), 'Bad depth for input size'
@@ -161,15 +174,16 @@ class EHeavy(nn.Module):
         x = [x]
         for d in range(self.depth):
             x.append(self.blocks[str(d)](x[-1]))
-            # print(x[-1].shape)
 
-        #x[self.depth] = x[self.depth].view(-1, self.bottom_features)
         if extract is None:
             return x[self.depth]
         return [x[d] if d in extract else None for d in range(self.depth + 1)]
 
 
 class Decoder(nn.Module):
+    """
+    This is the decoder of Image C path.
+    """
     def __init__(self, output_nc, last_conv_nc, input_size, depth, activation='relu', dropout=0., extract=None):
         super(Decoder, self).__init__()
         assert input_size // (2 ** depth) == input_size / (2 ** depth), 'Bad depth for input size'
@@ -188,10 +202,10 @@ class Decoder(nn.Module):
         self.blocks[str(0)] = DecoderBlock(32, output_nc, activation=None, dropout=dropout)
 
         self.skip = nn.ModuleDict()
-        if True or extract is not None and 0 in extract:
+        if True or extract is not None and 0 in extract:  # added True since saved model has all the skips
             self.skip[str(0)] = nn.Conv2d(2 * output_nc, output_nc, kernel_size=1)
         for d in reversed(range(1, depth)):
-            if True or extract is not None and d in extract:
+            if True or extract is not None and d in extract:  # added True since saved model has all the skips
                 self.skip[str(d)] = nn.Conv2d(2 * 32 * (2 ** min(4,d-1)), 32 * (2 ** min(4,d-1)), kernel_size=1)
 
         self.tanh = nn.Tanh()
@@ -202,8 +216,6 @@ class Decoder(nn.Module):
         y = x[self.depth].view(-1, self.last_conv_nc, self.feature_size, self.feature_size)
 
         for d in reversed(range(0, self.depth)):
-            # print(d)
-            # print(y.shape)
             y = self.blocks[str(d)](y)
             if x[d] is not None:
                 y = self.skip[str(d)](torch.cat((y, x[d]), dim=1))
@@ -215,6 +227,9 @@ class Decoder(nn.Module):
 
 
 class DecoderHeavy(nn.Module):
+    """
+    This is the decoder of Image C path for heavy mode.
+    """
     def __init__(self, output_nc, last_conv_nc, input_size, depth, activation='relu', dropout=0., extract=None, pad='reflect'):
         super(DecoderHeavy, self).__init__()
         assert input_size // (2 ** depth) == input_size / (2 ** depth), 'Bad depth for input size'
@@ -228,7 +243,6 @@ class DecoderHeavy(nn.Module):
         self.blocks[str(depth-1)] = nn.Sequential(
             custom_pad(1, pad),
             EncoderBlock(last_conv_nc, last_conv_nc, kernel=3, stride=1, padding=0, activation=activation, dropout=dropout),
-            #nn.ReflectionPad2d(1),
             DecoderBlock(last_conv_nc, min(last_conv_nc, 32 * (2 ** (depth-2))), kernel=4, stride=2, padding=1, activation=activation, dropout=dropout)
         )
         for d in reversed(range(1, depth-1)):
@@ -237,13 +251,11 @@ class DecoderHeavy(nn.Module):
             self.blocks[str(d)] = nn.Sequential(
                 custom_pad(1, pad),
                 EncoderBlock(filters_in, filters_in, kernel=3, stride=1, padding=0, activation=activation, dropout=dropout),
-                #nn.ReflectionPad2d(1),
                 DecoderBlock(filters_in, filters_out, kernel=4, stride=2, padding=1, activation=activation, dropout=dropout)
             )
         self.blocks[str(0)] = nn.Sequential(
             custom_pad(1, pad),
             EncoderBlock(32, 32, kernel=3, stride=1, padding=0, activation=activation, dropout=dropout),
-            #nn.ReflectionPad2d(1),
             DecoderBlock(32, 32, kernel=4, stride=2, padding=1, activation=activation, dropout=dropout),
             custom_pad(1, pad),
             EncoderBlock(32, 32, kernel=3, stride=1, padding=0, activation=activation, dropout=dropout),
@@ -252,7 +264,6 @@ class DecoderHeavy(nn.Module):
         )
 
         self.skip = nn.ModuleDict()
-        #self.skip[str(0)] = nn.Conv2d(2 * output_nc, output_nc, kernel_size=3, 0)
         for d in reversed(range(1, depth)):
             if extract is not None and d in extract:
                 filters = 32 * (2 ** min(4,d-1))
@@ -266,15 +277,10 @@ class DecoderHeavy(nn.Module):
     def forward(self, x, use_activation=True):
         if type(x) is not list:
             x = [None for _ in range(self.depth)] + [x]
-        #y = x[self.depth].view(-1, self.last_conv_nc, self.feature_size, self.feature_size)
         y = x[self.depth]
         for d in reversed(range(0, self.depth)):
-            # print(d)
-            # print(y.shape)
             y = self.blocks[str(d)](y)
-            # print(y.shape)
             if x[d] is not None:
-                # print(x[d].shape)
                 y = self.skip[str(d)](torch.cat((y, x[d]), dim=1))
 
         if use_activation:
@@ -284,6 +290,9 @@ class DecoderHeavy(nn.Module):
 
 
 class TransformerBlock(nn.Module):
+    """
+    This is the transformer for heavy mode.
+    """
     def __init__(self, filters_in, filters_out, activation):
         super(TransformerBlock, self).__init__()
 
@@ -337,24 +346,15 @@ class Generator(nn.Module):
             x1_A = x1
             x1_A = torch.cat((x1_A, mask_in1), dim=1)
             x2_B = torch.cat((x2, mask_in2), dim=1)
-            #print(x1_A.shape)
-            #print(x2_B.shape)
             e_x1_A = self.E_A(x1_A, extract=self.extract)
             e_x2_B = self.E_B(x2_B, extract=None)
-            #print(e_x1_A.shape)
-            #print(e_x2_B.shape)
             if self.extract is None:
                 z1 = torch.cat((e_x1_A, e_x2_B), dim=1)
                 z1 = self.Merger(z1.view(-1, self.E_A.bottom_features + self.E_B.bottom_features))
             else:
                 z1 = e_x1_A
-                # print('before z')
-                # print(e_x1_A[-1].shape)
-                # print(e_x2_B.shape)
                 z1[-1] = torch.cat((e_x1_A[-1], e_x2_B), dim=1)
                 z1[-1] = self.Merger(z1[-1].view(-1, self.E_A.bottom_features + self.E_B.bottom_features))
-                # print('after z')
-            # print('decoding')
             y1 = self.Decoder(z1, use_activation=use_activation)
         if mode is None or mode == 1:
             x2_A = x2
@@ -417,27 +417,15 @@ class GeneratorHeavy(nn.Module):
             x1_A = x1
             x1_A = torch.cat((x1_A, mask_in1), dim=1)
             x2_B = torch.cat((x2, mask_in2), dim=1)
-            # print(x1_A.shape)
-            # print(x2_B.shape)
             e_x1_A = self.E_A(x1_A, extract=self.extract)
             e_x2_B = self.E_B(x2_B, extract=None)
-            # print(e_x1_A.shape)
-            # print(e_x2_B.shape)
             if self.extract is None:
                 z1 = torch.cat((e_x1_A, e_x2_B), dim=1)
                 z1 = self.Merger(z1)
-                z1 = z1 + e_x2_B  # skip connection
             else:
                 z1 = e_x1_A
-                # print('before z')
-                # print(e_x1_A[-1].shape)
-                # print(e_x2_B.shape)
                 z1[-1] = torch.cat((e_x1_A[-1], e_x2_B), dim=1)
                 z1[-1] = self.Merger(z1[-1])
-                z1[-1] = z1[-1] + e_x2_B  # skip connection
-                # print('after z')
-                # print(z1[-1].shape)
-            # print('decoding')
             y1 = self.Decoder(z1, use_activation=use_activation)
         if mode is None or mode == 1:
             x2_A = x2
@@ -448,12 +436,10 @@ class GeneratorHeavy(nn.Module):
             if self.extract is None:
                 z2 = torch.cat((e_x2_A, e_x1_B), dim=1)
                 z2 = self.Merger(z2)
-                z2 = z2 + e_x1_B  # skip connection
             else:
                 z2 = e_x2_A
                 z2[-1] = torch.cat((e_x2_A[-1], e_x1_B), dim=1)
                 z2[-1] = self.Merger(z2[-1])
-                z2[-1] = z2[-1] + e_x1_B  # skip connection
             y2 = self.Decoder(z2, use_activation=use_activation)
 
         if mode is None:
@@ -464,146 +450,6 @@ class GeneratorHeavy(nn.Module):
             y = y2
 
         return y
-
-
-class GeneratorDecoder(nn.Module):
-    def __init__(self, in_features, output_nc, last_conv_nc, input_size, depth, extract=None):
-        super(GeneratorDecoder, self).__init__()
-        self.in_features = in_features
-        self.output_nc = output_nc
-        self.last_conv_nc = last_conv_nc
-        self.input_size = input_size
-        self.extract = extract
-
-        self.Decoder = Decoder(output_nc, last_conv_nc, input_size, depth, extract=extract)
-        self.Merger = nn.Sequential(
-            nn.Linear(in_features, self.Decoder.bottom_features),
-            nn.ReLU(inplace=True)
-        )
-
-    def forward(self, e_x1, e_x2, mode=None, use_activation=True):
-
-        if mode is None or mode == 0:
-            if self.extract is None:
-                e_x1_A = e_x1.clone()
-                e_x2_B = e_x2.clone()
-                z1 = torch.cat((e_x1_A, e_x2_B), dim=1)
-                z1 = self.Merger(z1.view(-1, self.in_features))
-            else:
-                e_x1_A = [None if e_x1[i] is None else e_x1[i].clone() for i in range(len(e_x1))]
-                e_x2_B = [None if e_x2[i] is None else e_x2[i].clone() for i in range(len(e_x2))]
-                z1 = e_x1_A
-                # print('before z')
-                # print(e_x1_A[-1].shape)
-                # print(e_x2_B.shape)
-                z1[-1] = torch.cat((e_x1_A[-1], e_x2_B[-1]), dim=1)
-                z1[-1] = self.Merger(z1[-1].view(-1, self.in_features))
-                # print('after z')
-            # print('decoding')
-            y1 = self.Decoder(z1, use_activation=use_activation)
-        if mode is None or mode == 1:
-
-            if self.extract is None:
-                e_x2_A = e_x2.clone()
-                e_x1_B = e_x1.clone()
-                z2 = torch.cat((e_x2_A, e_x1_B), dim=1)
-                z2 = self.Merger(z2.view(-1, self.in_features))
-            else:
-                e_x2_A = [None if e_x2[i] is None else e_x2[i].clone() for i in range(len(e_x2))]
-                e_x1_B = [None if e_x1[i] is None else e_x1[i].clone() for i in range(len(e_x1))]
-                z2 = e_x2_A
-                z2[-1] = torch.cat((e_x2_A[-1], e_x1_B[-1]), dim=1)
-                z2[-1] = self.Merger(z2[-1].view(-1, self.in_features))
-            y2 = self.Decoder(z2, use_activation=use_activation)
-
-        if mode is None:
-            y = torch.cat((y1.unsqueeze(1), y2.unsqueeze(1)), dim=1)
-        elif mode == 0:
-            y = y1
-        else:
-            y = y2
-
-        return y
-
-
-class GeneratorDecoderHeavy(nn.Module):
-    def __init__(self, in_conv_nc, output_nc, last_conv_nc, input_size, depth, extract=None):
-        super(GeneratorDecoderHeavy, self).__init__()
-        self.in_conv_nc = in_conv_nc
-        self.output_nc = output_nc
-        self.last_conv_nc = last_conv_nc
-        self.input_size = input_size
-        self.extract = extract
-
-        self.Decoder = DecoderHeavy(output_nc, last_conv_nc, input_size, depth, extract=extract)
-        self.Merger = TransformerBlock(in_conv_nc, last_conv_nc, activation='relu')
-
-    def forward(self, e_x1, e_x2, mode=None, use_activation=True):
-
-        if mode is None or mode == 0:
-            if self.extract is None:
-                e_x1_A = e_x1.clone()
-                e_x2_B = e_x2.clone()
-                z1 = torch.cat((e_x1_A, e_x2_B), dim=1)
-                z1 = self.Merger(z1)
-            else:
-                e_x1_A = [None if e_x1[i] is None else e_x1[i].clone() for i in range(len(e_x1))]
-                e_x2_B = [None if e_x2[i] is None else e_x2[i].clone() for i in range(len(e_x2))]
-                z1 = e_x1_A
-                # print('before z')
-                # print(e_x1_A[-1].shape)
-                # print(e_x2_B.shape)
-                z1[-1] = torch.cat((e_x1_A[-1], e_x2_B[-1]), dim=1)
-                z1[-1] = self.Merger(z1[-1])
-                # print('after z')
-            # print('decoding')
-            y1 = self.Decoder(z1, use_activation=use_activation)
-        if mode is None or mode == 1:
-
-            if self.extract is None:
-                e_x2_A = e_x2.clone()
-                e_x1_B = e_x1.clone()
-                z2 = torch.cat((e_x2_A, e_x1_B), dim=1)
-                z2 = self.Merger(z2)
-            else:
-                e_x2_A = [None if e_x2[i] is None else e_x2[i].clone() for i in range(len(e_x2))]
-                e_x1_B = [None if e_x1[i] is None else e_x1[i].clone() for i in range(len(e_x1))]
-                z2 = e_x2_A
-                z2[-1] = torch.cat((e_x2_A[-1], e_x1_B[-1]), dim=1)
-                z2[-1] = self.Merger(z2[-1])
-            y2 = self.Decoder(z2, use_activation=use_activation)
-
-        if mode is None:
-            y = torch.cat((y1.unsqueeze(1), y2.unsqueeze(1)), dim=1)
-        elif mode == 0:
-            y = y1
-        else:
-            y = y2
-
-        return y
-
-
-class Disc(nn.Module):
-    def __init__(self, input_nc, last_conv_nc, sep, input_size, depth):
-        super(Disc, self).__init__()
-        assert input_size // (2 ** depth) == input_size / (2 ** depth), 'Bad depth for input size'
-        self.input_nc = input_nc
-        self.last_conv_nc = last_conv_nc
-        self.sep = sep
-        self.feature_size = input_size // (2 ** depth)
-
-        self.classify = nn.Sequential(
-            nn.Linear((last_conv_nc - self.sep) * self.feature_size * self.feature_size, last_conv_nc),
-            nn.LeakyReLU(0.2, inplace=True),
-            nn.Linear(last_conv_nc, 1),
-            nn.Sigmoid()
-        )
-
-    def forward(self, x):
-        x = x.view(-1, (self.last_conv_nc - self.sep) * self.feature_size * self.feature_size)
-        x = self.classify(x)
-        x = x.view(-1)
-        return x
 
 
 class Discriminator(nn.Module):
@@ -617,12 +463,10 @@ class Discriminator(nn.Module):
 
         self.E = E1(input_nc, last_conv_nc, 0, self.input_size, depth, activation='relu')
         self.linear = nn.Linear(last_conv_nc * self.feature_size * self.feature_size, 1)
-        #self.activation = nn.Sigmoid()
 
     def forward(self, x):
         x = self.E(x)
         x = self.linear(x.view(-1, self.last_conv_nc * self.feature_size * self.feature_size))
-        #x = self.activation(x)
         return x
 
 
@@ -652,35 +496,6 @@ class DiscriminatorReID(nn.Module):
         return x
 
 
-class DiscriminatorTriplet(nn.Module):
-    def __init__(self, input_nc, last_conv_nc, input_size, depth):
-        super(DiscriminatorTriplet, self).__init__()
-        assert input_size // (2 ** depth) == input_size / (2 ** depth), 'Bad depth for input size'
-        self.input_nc = input_nc
-        self.last_conv_nc = last_conv_nc
-        self.input_size = input_size
-        self.feature_size = input_size // (2 ** depth)
-
-        self.E = E1(input_nc, last_conv_nc, 0, self.input_size, depth)
-        self.linear1 = nn.Linear(last_conv_nc * self.feature_size * self.feature_size, 256)
-        #self.relu = nn.ReLU()
-        #self.linear2 = nn.Linear(512, 256)
-        self.sigmoid = nn.Sigmoid()
-
-    def forward(self, x, use_activation=False):
-        x1 = x[:, 0, :, :, :]
-        x2 = x[:, 1, :, :, :]
-        x3 = x[:, 2, :, :, :]
-
-        x1, x2, x3 = self.E(x1), self.E(x2), self.E(x3)
-        x1, x2, x3 = self.linear1(x1), self.linear1(x2), self.linear1(x3)
-        #x1, x2, x3 = self.relu(x1), self.relu(x2), self.relu(x3)
-        #x1, x2, x3 = self.linear2(x1), self.linear2(x2), self.linear2(x3)
-        if use_activation:
-            x1, x2, x3 = self.sigmoid(x1), self.sigmoid(x2), self.sigmoid(x3)
-        return torch.cat([x1.unsqueeze(1), x2.unsqueeze(1), x3.unsqueeze(1)], dim=1)
-
-
 class Classifier200(nn.Module):
     def __init__(self, input_nc, last_conv_nc, input_size, depth):
         super(Classifier200, self).__init__()
@@ -702,58 +517,3 @@ class Classifier200(nn.Module):
         x = self.linear2(x)
         #x = self.softmax(x)
         return x
-
-
-class AutoEncoder2(nn.Module):
-    def __init__(self, input_nc, output_nc, last_conv_nc, sep, input_size, depth, preprocess):
-        super(AutoEncoder2, self).__init__()
-        self.input_nc = input_nc
-        self.output_nc = output_nc
-        self.last_conv_nc = last_conv_nc
-        self.sep = sep
-        self.input_size = input_size
-        self.preprocess = preprocess
-
-        self.E = E1(self.input_nc, last_conv_nc, sep, input_size, depth)
-        self.Decoder = Decoder(output_nc, last_conv_nc, input_size, depth)
-
-    def forward(self, x, mask_in, mode=None):
-        N, B, C, H, W = x.shape
-        if mode is None:
-            mask_in1 = mask_in[:, 0, 0, :, :].unsqueeze(1)
-            mask_in2 = mask_in[:, 1, 0, :, :].unsqueeze(1)
-        else:
-            mask_in1 = mask_in[:, 0, :, :].unsqueeze(1)
-            mask_in2 = mask_in[:, 0, :, :].unsqueeze(1)
-
-        mask_in1 = torch.cat((mask_in1, 1 - mask_in1), dim=1)
-        mask_in2 = torch.cat((mask_in2, 1 - mask_in2), dim=1)
-
-        x1 = x[:, 0, :, :, :]
-        x2 = x[:, 1, :, :, :]
-
-        if mode is None or mode == 0:
-            x1_A = x1
-            x1_A = torch.cat([x1_A, mask_in1], dim=1)
-            x2_B = torch.cat([x2, mask_in2], dim=1)
-            e_x1_A = self.E(x1_A)
-            e_x2_B = self.E(x2_B)
-            z1 = torch.cat([e_x1_A, e_x2_B], dim=1)
-            y1 = self.Decoder(z1)
-        if mode is None or mode == 1:
-            x2_A = x2
-            x2_A = torch.cat([x2_A, mask_in2], dim=1)
-            x1_B = torch.cat([x1, mask_in1], dim=1)
-            e_x2_A = self.E(x2_A)
-            e_x1_B = self.E(x1_B)
-            z2 = torch.cat([e_x2_A, e_x1_B], dim=1)
-            y2 = self.Decoder(z2)
-
-        if mode is None:
-            y = torch.cat([y1.unsqueeze(1), y2.unsqueeze(1)], dim=1)
-        elif mode == 0:
-            y = y1
-        else:
-            y = y2
-
-        return y
