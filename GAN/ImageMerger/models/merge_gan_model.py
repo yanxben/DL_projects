@@ -72,17 +72,6 @@ class mergeganmodel(BaseModel):
         """
         BaseModel.__init__(self, opt)
 
-        # # specify the training losses you want to print out. The training/test scripts will call <BaseModel.get_current_losses>
-        # self.loss_names = ['D_A', 'G_A', 'rec_A', 'background_A', 'D_B', 'G_B', 'rec_B', 'background_B']
-        # # specify the images you want to save/display. The training/test scripts will call <BaseModel.get_current_visuals>
-        # visual_names_A = ['real_A', 'fake_B', 'rec_A']
-        # visual_names_B = ['real_B', 'fake_A', 'rec_B']
-        # if self.isTrain and self.opt.lambda_Background > 0.0:  # if identity loss is used, we also visualize background_loss A[1-mask]=G(A,B)[1-mask] and B[1-mask]=G(B,A)[1-mask]
-        #     visual_names_A.append('background_A')
-        #     visual_names_B.append('background_B')
-        #
-        # self.visual_names = visual_names_A + visual_names_B  # combine visualizations for A and B
-
         # specify the models you want to save to the disk. The training/test scripts will call <BaseModel.save_networks> and <BaseModel.load_networks>.
         if self.isTrain:
             self.model_names = ['Gen', 'Disc', 'ReID']
@@ -241,10 +230,10 @@ class mergeganmodel(BaseModel):
                 mask_in=self.mask_G[:, self.B, :, :, :], mode=self.B)  # G(G(A))
         else:
             self.rec_G_2A = self.netGen(
-                torch.cat((self.fake_G[:, self.A, :, :, :].unsqueeze(1), self.real_G[:, self.A, :, :, :].unsqueeze(1).flip(4)), dim=1),
+                torch.cat((self.fake_G[:, self.A, :, :, :].unsqueeze(1), self.real_G[:, self.A, :, :, :].unsqueeze(1)), dim=1),
                 mode=self.A)  # G(G(A))
             self.rec_G_2B = self.netGen(
-                torch.cat((self.real_G[:, self.B, :, :, :].unsqueeze(1).flip(4), self.fake_G[:, self.B, :, :, :].unsqueeze(1)), dim=1),
+                torch.cat((self.real_G[:, self.B, :, :, :].unsqueeze(1), self.fake_G[:, self.B, :, :, :].unsqueeze(1)), dim=1),
                 mode=self.B)  # G(G(A))
 
     def optimize_D(self):
@@ -257,8 +246,8 @@ class mergeganmodel(BaseModel):
         _, _, C, H, W = self.fake_G.shape
 
         # Disc
-        # Real
         if self.opt.Disc:
+            # Real
             pred_real = self.netDisc(self.real_D)
             loss_D_real = self.criterionGAN(pred_real, True)
             # Fake
