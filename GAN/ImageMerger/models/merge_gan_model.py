@@ -38,6 +38,7 @@ class mergeganmodel(BaseModel):
             parser.add_argument('--pad', type=str, default='reflect', help='mode of padding zero/reflect')
             parser.add_argument('--normalization', type=str, default='instance', help='instance normalization or batch normalization [instance | batch | none]')
 
+            parser.add_argument('--mask_output', dest='mask_background', action='store_true', help='mask output')
             parser.add_argument('--no_background', dest='background', action='store_false', help='use background')
             parser.add_argument('--attention', dest='attention', action='store_true', help='use attention layer')
             parser.add_argument('--no_Disc', dest='Disc', action='store_false', help='use Disc')
@@ -54,6 +55,7 @@ class mergeganmodel(BaseModel):
                                 help='use background mapping')
             parser.add_argument('--lambda_Disc', type=float, default=0.2,
                                 help='lambda for Disc loss of Generator')
+
             parser.add_argument('--lambda_ReID', type=float, default=0.2,
                                 help='lambda for ReID loss of Generator')
 
@@ -211,12 +213,16 @@ class mergeganmodel(BaseModel):
                 self.fake_G, self.mask_G = self.netGen(self.real_G, mask_out=True)  # G(A)
             else:
                 self.fake_G = self.netGen(self.real_G, mask_in=self.mask_G)  # G(A)
+                if self.opt.mask_output:
+                    self.fake_G = torch.where(self.mask_G >= .5, self.fake_G, self.real_G)
         else:
             self.fake_G = self.netGen(self.real_G)  # G(A)
 
         # Recreate original images from the fake images
         if self.opt.background and not self.opt.attention:
             self.rec_G_1 = self.netGen(self.fake_G, mask_in=self.mask_G)   # G(G(A))
+            if self.opt.mask_output:
+                self.rec_G_1 = torch.where(self.mask_G >= .5, self.rec_G_1, self.fake_G)
         else:
             self.rec_G_1 = self.netGen(self.fake_G)  # G(G(A))
 
@@ -228,6 +234,9 @@ class mergeganmodel(BaseModel):
             self.rec_G_2B = self.netGen(
                 torch.cat((self.real_G[:, self.B, :, :, :].unsqueeze(1), self.fake_G[:, self.B, :, :, :].unsqueeze(1)), dim=1),
                 mask_in=self.mask_G[:, self.B, :, :, :], mode=self.B)  # G(G(A))
+            if self.opt.mask_output:
+                self.rec_G_2A = torch.where(self.mask_G[:, self.A, :, :, :] >= .5, self.rec_G_2A, self.real_G[:, self.A, :, :, :])
+                self.rec_G_2B = torch.where(self.mask_G[:, self.B, :, :, :] >= .5, self.rec_G_2B, self.real_G[:, self.B, :, :, :])
         else:
             self.rec_G_2A = self.netGen(
                 torch.cat((self.fake_G[:, self.A, :, :, :].unsqueeze(1), self.real_G[:, self.A, :, :, :].unsqueeze(1)), dim=1),
