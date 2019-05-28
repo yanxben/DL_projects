@@ -38,7 +38,7 @@ class mergeganmodel(BaseModel):
             parser.add_argument('--pad', type=str, default='reflect', help='mode of padding zero/reflect')
             parser.add_argument('--normalization', type=str, default='instance', help='instance normalization or batch normalization [instance | batch | none]')
 
-            parser.add_argument('--mask_output', dest='mask_background', action='store_true', help='mask output')
+            parser.add_argument('--mask_output', dest='mask_output', action='store_true', help='mask output')
             parser.add_argument('--no_background', dest='background', action='store_false', help='use background')
             parser.add_argument('--attention', dest='attention', action='store_true', help='use attention layer')
             parser.add_argument('--no_Disc', dest='Disc', action='store_false', help='use Disc')
@@ -392,6 +392,7 @@ class mergeganmodel(BaseModel):
         # Get results
         with torch.no_grad():
             test_results = self.netGen(real_G, mask_in=mask_G)
+            recon_results = self.netGen(test_results, mask_in=mask_G)
 
             iden_results = self.netGen(
                 real_G.reshape(2*N, 1, C, H, W).expand(2*N, 2, C, H, W),
@@ -399,4 +400,9 @@ class mergeganmodel(BaseModel):
                 mode=self.A
             )
 
-        return test_results, iden_results
+            if self.opt.mask_output:
+                test_results = torch.where(mask_G >= .5, test_results, real_G)
+                recon_results = torch.where(mask_G >= .5, recon_results, test_results)
+                iden_results = torch.where(mask_G.reshape(2*N, C, H, W) >= .5, iden_results, real_G.reshape(2*N, C, H, W))
+
+        return test_results, recon_results, iden_results
