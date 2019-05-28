@@ -38,7 +38,7 @@ class mergeganmodel(BaseModel):
             parser.add_argument('--pad', type=str, default='reflect', help='mode of padding zero/reflect')
             parser.add_argument('--normalization', type=str, default='instance', help='instance normalization or batch normalization [instance | batch | none]')
 
-            parser.add_argument('--mask_output', dest='mask_background', action='store_true', help='mask output')
+            parser.add_argument('--mask_output', dest='mask_output', action='store_true', help='mask output')
             parser.add_argument('--no_background', dest='background', action='store_false', help='use background')
             parser.add_argument('--attention', dest='attention', action='store_true', help='use attention layer')
             parser.add_argument('--no_Disc', dest='Disc', action='store_false', help='use Disc')
