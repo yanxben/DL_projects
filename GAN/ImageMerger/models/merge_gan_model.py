@@ -55,7 +55,6 @@ class mergeganmodel(BaseModel):
                                 help='use background mapping')
             parser.add_argument('--lambda_Disc', type=float, default=0.2,
                                 help='lambda for Disc loss of Generator')
-
             parser.add_argument('--lambda_ReID', type=float, default=0.2,
                                 help='lambda for ReID loss of Generator')
 
