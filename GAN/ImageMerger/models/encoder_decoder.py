@@ -349,7 +349,7 @@ class TransformerBlock(nn.Module):
 
 
 class Generator(nn.Module):
-    def __init__(self, input_nc, output_nc, e1_conv_nc, e2_conv_nc, last_conv_nc, input_size, depth, extract=None, normalization='instance'):
+    def __init__(self, input_nc, output_nc, e1_conv_nc, e2_conv_nc, last_conv_nc, input_size, depth, extract=None, normalization='instance', mask_input=False):
         super(Generator, self).__init__()
         self.input_nc = input_nc
         self.output_nc = output_nc
@@ -359,6 +359,7 @@ class Generator(nn.Module):
         self.sep = 0
         self.input_size = input_size
         self.extract = extract
+        self.mask_input = mask_input
 
         self.E_A = E1(self.input_nc, e1_conv_nc, 0, input_size, depth, normalization=normalization)
         self.E_B = E2(self.input_nc, e2_conv_nc, input_size, depth, normalization=normalization)
