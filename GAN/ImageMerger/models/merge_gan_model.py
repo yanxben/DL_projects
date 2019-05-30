@@ -26,7 +26,7 @@ class mergeganmodel(BaseModel):
         """
         parser.set_defaults(no_dropout=True)  # default CycleGAN did not use dropout
         if is_train:
-            parser.add_argument('--model_config', type=str, default='light', help='type of model light/heavy')
+            parser.add_argument('--model_config', type=str, default='light', help='type of model light/heavy/munit')
 
             parser.add_argument('--last_conv_nc', type=int, default=512, help='')
             parser.add_argument('--e1_conv_nc', type=int, default=512, help='')
@@ -38,6 +38,7 @@ class mergeganmodel(BaseModel):
             parser.add_argument('--pad', type=str, default='reflect', help='mode of padding zero/reflect')
             parser.add_argument('--normalization', type=str, default='instance', help='instance normalization or batch normalization [instance | batch | none]')
 
+            parser.add_argument('--mask_input', dest='mask_input', action='store_true', help='mask input')
             parser.add_argument('--mask_output', dest='mask_output', action='store_true', help='mask output')
             parser.add_argument('--no_background', dest='background', action='store_false', help='use background')
             parser.add_argument('--attention', dest='attention', action='store_true', help='use attention layer')
@@ -86,11 +87,17 @@ class mergeganmodel(BaseModel):
         if self.opt.model_config == 'light':
             self.netGen = encoder_decoder.Generator(opt.input_nc + (2 if opt.background else 0), opt.input_nc,
                                                     opt.e1_conv_nc, opt.e2_conv_nc, opt.last_conv_nc, opt.input_size,
-                                                    opt.depth, extract=[1, 3, opt.depth], normalization=opt.normalization).to(self.device)
+                                                    opt.depth, extract=[1, 3, opt.depth], normalization=opt.normalization,
+                                                    mask_input=opt.mask_input).to(self.device)
         elif self.opt.model_config == 'heavy':
             self.netGen = encoder_decoder.GeneratorHeavy(opt.input_nc + (2 if opt.background else 0), opt.input_nc,
                                                     opt.e1_conv_nc, opt.e2_conv_nc, opt.last_conv_nc, opt.input_size,
                                                     opt.depth, extract=[2, opt.depth], pad=opt.pad, normalization=opt.normalization).to(self.device)
+        elif self.opt.model_config == 'munit':
+            self.netGen = encoder_decoder.GeneratorMunit(opt.input_nc + (2 if opt.background else 0), opt.input_nc,
+                                                         opt.e1_conv_nc, opt.e2_conv_nc, opt.last_conv_nc, opt.input_size,
+                                                         opt.depth, extract=None, normalization=opt.normalization,
+                                                         mask_input=opt.mask_input).to(self.device)
 
         # Define Discriminators
         if self.isTrain:
@@ -98,6 +105,7 @@ class mergeganmodel(BaseModel):
                                                          normalization=opt.normalization).to(self.device)
             self.netReID = encoder_decoder.DiscriminatorReID(opt.input_nc, opt.last_conv_nc, opt.input_size, opt.depth,
                                                              out_features=opt.reid_features, normalization=opt.normalization).to(self.device)
+
             if opt.ReID_mean:
                 self.real_a_embed_mean = dict()
                 for i in range(1, 201):

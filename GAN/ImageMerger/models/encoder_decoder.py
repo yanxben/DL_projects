@@ -289,6 +289,47 @@ class DecoderHeavy(nn.Module):
             return y
 
 
+class DecoderMunit(nn.Module):
+    def __init__(self, n_upsample, n_res, dim, output_dim, res_norm='adain', activ='relu', pad_type='zero'):
+        super(DecoderMunit, self).__init__()
+        from .munit import ResBlocks, Conv2dBlock
+
+        self.model = []
+        # AdaIN residual blocks
+        self.model += [ResBlocks(n_res, dim, res_norm, activ, pad_type=pad_type)]
+        # upsampling blocks
+        for i in range(n_upsample):
+            self.model += [nn.Upsample(scale_factor=2),
+                           Conv2dBlock(dim, dim // 2, 5, 1, 2, norm='ln', activation=activ, pad_type=pad_type)]
+            dim //= 2
+        # use reflection padding in the last conv layer
+        self.model += [Conv2dBlock(dim, output_dim, 7, 1, 3, norm='none', activation='tanh', pad_type=pad_type)]
+        self.model = nn.Sequential(*self.model)
+
+    def forward(self, x):
+        return self.model(x)
+
+
+class EncoderMunit(nn.Module):
+    def __init__(self, n_downsample, input_dim, dim, style_dim, norm, activ, pad_type):
+        super(EncoderMunit, self).__init__()
+        from .munit import Conv2dBlock
+
+        self.model = []
+        self.model += [Conv2dBlock(input_dim, dim, 7, 1, 3, norm=norm, activation=activ, pad_type=pad_type)]
+        for i in range(n_downsample):
+            next_dim = min(style_dim, dim * 2)
+            self.model += [Conv2dBlock(dim, next_dim, 4, 2, 1, norm=norm, activation=activ, pad_type=pad_type)]
+            dim = next_dim
+        #self.model += [nn.AdaptiveAvgPool2d(1)] # global average pooling
+        self.model += [nn.Conv2d(dim, style_dim, 1, 1, 0)]
+        self.model = nn.Sequential(*self.model)
+        self.output_dim = dim
+
+    def forward(self, x):
+        return self.model(x)
+
+
 class TransformerBlock(nn.Module):
     """
     This is the transformer for heavy mode.
@@ -343,7 +384,7 @@ class Generator(nn.Module):
         x2 = x[:, 1, :, :, :]
 
         if mode is None or mode == 0:
-            x1_A = x1
+            x1_A = x1 if not self.mask_input else torch.zeros_like(x1)
             x1_A = torch.cat((x1_A, mask_in1), dim=1)
             x2_B = torch.cat((x2, mask_in2), dim=1)
             e_x1_A = self.E_A(x1_A, extract=self.extract)
@@ -357,7 +398,7 @@ class Generator(nn.Module):
                 z1[-1] = self.Merger(z1[-1].view(-1, self.E_A.bottom_features + self.E_B.bottom_features))
             y1 = self.Decoder(z1, use_activation=use_activation)
         if mode is None or mode == 1:
-            x2_A = x2
+            x2_A = x2 if not self.mask_input else torch.zeros_like(x2)
             x2_A = torch.cat((x2_A, mask_in2), dim=1)
             x1_B = torch.cat((x1, mask_in1), dim=1)
             e_x2_A = self.E_A(x2_A, extract=self.extract)
@@ -441,6 +482,80 @@ class GeneratorHeavy(nn.Module):
                 z2[-1] = torch.cat((e_x2_A[-1], e_x1_B), dim=1)
                 z2[-1] = self.Merger(z2[-1])
             y2 = self.Decoder(z2, use_activation=use_activation)
+
+        if mode is None:
+            y = torch.cat((y1.unsqueeze(1), y2.unsqueeze(1)), dim=1)
+        elif mode == 0:
+            y = y1
+        else:
+            y = y2
+
+        return y
+
+
+class GeneratorMunit(nn.Module):
+    def __init__(self, input_nc, output_nc, e1_conv_nc, e2_conv_nc, last_conv_nc, input_size, depth, extract=None, normalization='instance', mask_input=False):
+        super(GeneratorMunit, self).__init__()
+        self.input_nc = input_nc
+        self.output_nc = output_nc
+        self.e1_conv_nc = e1_conv_nc
+        self.e2_conv_nc = e2_conv_nc
+        self.last_conv_nc = last_conv_nc
+        self.sep = 0
+        self.input_size = input_size
+        self.extract = extract
+        self.mask_input = mask_input
+
+        #n_downsample, input_dim, dim, style_dim, norm, activ, pad_type)
+        self.E_A = EncoderMunit(depth, input_nc, 32, e1_conv_nc, 'ln', 'lrelu', 'zero')
+        self.E_B = EncoderMunit(depth, input_nc, 32, e2_conv_nc, 'ln', 'lrelu', 'zero')
+        #n_upsample, n_res, dim, output_dim, res_norm='adain', activ='relu', pad_type='zero')
+        self.Decoder = DecoderMunit(depth, 2, 2*last_conv_nc, output_nc, res_norm='ln', activ='relu', pad_type='zero')
+        #self.Merger = TransformerBlock(e1_conv_nc + e2_conv_nc, last_conv_nc, activation='relu', normalization=normalization)
+
+    def forward(self, x, mask_in, mode=None, use_activation=True):
+        N, B, C, H, W = x.shape
+        if mode is None:
+            mask_in1 = mask_in[:, 0, 0, :, :].unsqueeze(1)
+            mask_in2 = mask_in[:, 1, 0, :, :].unsqueeze(1)
+        else:
+            mask_in1 = mask_in[:, 0, :, :].unsqueeze(1)
+            mask_in2 = mask_in[:, 0, :, :].unsqueeze(1)
+
+        mask_in1 = torch.cat((mask_in1, 1 - mask_in1), dim=1)
+        mask_in2 = torch.cat((mask_in2, 1 - mask_in2), dim=1)
+
+        x1 = x[:, 0, :, :, :]
+        x2 = x[:, 1, :, :, :]
+
+        if mode is None or mode == 0:
+            x1_A = x1 if not self.mask_input else torch.zeros_like(x1)
+            x1_A = torch.cat((x1_A, mask_in1), dim=1)
+            x2_B = torch.cat((x2, mask_in2), dim=1)
+            e_x1_A = self.E_A(x1_A)
+            e_x2_B = self.E_B(x2_B)
+            if self.extract is None:
+                z1 = torch.cat((e_x1_A, e_x2_B), dim=1)
+                #z1 = self.Merger(z1.view(-1, self.E_A.bottom_features + self.E_B.bottom_features))
+            else:
+                z1 = e_x1_A
+                z1[-1] = torch.cat((e_x1_A[-1], e_x2_B), dim=1)
+                #z1[-1] = self.Merger(z1[-1].view(-1, self.E_A.bottom_features + self.E_B.bottom_features))
+            y1 = self.Decoder(z1)
+        if mode is None or mode == 1:
+            x2_A = x2 if not self.mask_input else torch.zeros_like(x2)
+            x2_A = torch.cat((x2_A, mask_in2), dim=1)
+            x1_B = torch.cat((x1, mask_in1), dim=1)
+            e_x2_A = self.E_A(x2_A)
+            e_x1_B = self.E_B(x1_B)
+            if self.extract is None:
+                z2 = torch.cat((e_x2_A, e_x1_B), dim=1)
+                #z2 = self.Merger(z2.view(-1, self.E_A.bottom_features + self.E_B.bottom_features))
+            else:
+                z2 = e_x2_A
+                z2[-1] = torch.cat((e_x2_A[-1], e_x1_B), dim=1)
+                #z2[-1] = self.Merger(z2[-1].view(-1, self.E_A.bottom_features + self.E_B.bottom_features))
+            y2 = self.Decoder(z2)
 
         if mode is None:
             y = torch.cat((y1.unsqueeze(1), y2.unsqueeze(1)), dim=1)

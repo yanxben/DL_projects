@@ -37,10 +37,13 @@ if __name__ == '__main__':
     model = create_model(opt)      # create a model given opt.model and other options
     model.setup(opt)               # regular setup: load and print networks; create schedulers
 
-    if socket.gethostname() == 'YABENN-P50':
-        caltech_path = 'C:/Datasets/Caltech-UCSD-Birds-200'
-    elif os.sys.platform == 'linux':
-        caltech_path = '/home/' + os.getlogin() + '/Datasets/Caltech-UCSD-Birds-200'
+    if opt.caltech_path is not None:
+        caltech_path = opt.caltech_path
+    else:
+        if socket.gethostname() == 'YABENN-P50':
+            caltech_path = 'C:/Datasets/Caltech-UCSD-Birds-200'
+        elif os.sys.platform == 'linux':
+            caltech_path = '/home/' + os.getlogin() + '/Datasets/Caltech-UCSD-Birds-200'
     _, caltech_data, caltech_meta, testset = create_dataset_caltech_ucsd(caltech_path, opt.batch_size, size=opt.data_size ,mode=opt.data_mode, imsize=opt.input_size, testset=testset)  # create a dataset given opt.dataset_mode and other options
 
     caltech_labels = caltech_meta['labels']

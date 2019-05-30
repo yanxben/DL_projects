@@ -124,8 +124,8 @@ def load_caltech_data(path, imsize=128, type='pickle', mode='cropped', min_count
                 mask_delta[max(-top,0):min(delta, H-top), max(-left,0):min(delta, W-left)] = \
                     seg[max(0,top):min(top+delta, H), max(0,left):min(left+delta, W)]
 
-                images[n] = scipy.misc.imresize(image_delta, [modesize, modesize, 3]).transpose(2, 0, 1) / 255
-                # images[n] = skimage.transform.resize(mask_delta, [modesize, modesize], anti_aliasing=True, preserve_range=True)
+                #images[n] = scipy.misc.imresize(image_delta, [modesize, modesize, 3]).transpose(2, 0, 1) / 255
+                images[n] = skimage.transform.resize(mask_delta, [modesize, modesize], anti_aliasing=True, preserve_range=True)
                 masks[n] = skimage.transform.resize(mask_delta, [modesize, modesize], anti_aliasing=True, preserve_range=True)
                 masks[n] = np.where(masks[n] > 0.5, np.ones_like(masks[n]), np.zeros_like(masks[n]))
                 # plt.subplot(2, 2, 1)
