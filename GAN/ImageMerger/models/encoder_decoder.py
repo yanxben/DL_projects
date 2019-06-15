@@ -497,7 +497,7 @@ class GeneratorHeavy(nn.Module):
 
 
 class GeneratorMunit(nn.Module):
-    def __init__(self, input_nc, output_nc, e1_conv_nc, e2_conv_nc, last_conv_nc, input_size, depth, extract=None, normalization='instance', mask_input=False):
+    def __init__(self, input_nc, output_nc, features, e1_conv_nc, e2_conv_nc, last_conv_nc, input_size, depth, extract=None, normalization='instance', mask_input=False):
         super(GeneratorMunit, self).__init__()
         self.input_nc = input_nc
         self.output_nc = output_nc
@@ -510,10 +510,10 @@ class GeneratorMunit(nn.Module):
         self.mask_input = mask_input
 
         #n_downsample, input_dim, dim, style_dim, norm, activ, pad_type)
-        self.E_A = EncoderMunit(depth, input_nc, 32, e1_conv_nc, 'ln', 'lrelu', 'zero')
-        self.E_B = EncoderMunit(depth, input_nc, 32, e2_conv_nc, 'ln', 'lrelu', 'zero')
+        self.E_A = EncoderMunit(depth, input_nc, features, e1_conv_nc, 'ln', 'lrelu', 'zero')
+        self.E_B = EncoderMunit(depth, input_nc, features, e2_conv_nc, 'ln', 'lrelu', 'zero')
         #n_upsample, n_res, dim, output_dim, res_norm='adain', activ='relu', pad_type='zero')
-        self.Decoder = DecoderMunit(depth, 2, 2*last_conv_nc, output_nc, res_norm='ln', activ='relu', pad_type='zero')
+        self.Decoder = DecoderMunit(depth, 2, 2*last_conv_nc, output_nc, res_norm='ln', activ='lrelu', pad_type='zero')
         #self.Merger = TransformerBlock(e1_conv_nc + e2_conv_nc, last_conv_nc, activation='relu', normalization=normalization)
 
     def forward(self, x, mask_in, mode=None, use_activation=True):
