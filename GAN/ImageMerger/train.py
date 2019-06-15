@@ -73,14 +73,8 @@ if __name__ == '__main__':
 
     plt.figure('test merge')
     for i in range(testlen//2):
-        plt.subplot(testlen//2, 8, i * 8 + 1)
-        plt.subplot(testlen//2, 8, i * 8 + 2)
-        plt.subplot(testlen//2, 8, i * 8 + 3)
-        plt.subplot(testlen//2, 8, i * 8 + 4)
-        plt.subplot(testlen//2, 8, i * 8 + 5)
-        plt.subplot(testlen//2, 8, i * 8 + 6)
-        plt.subplot(testlen//2, 8, i * 8 + 7)
-        plt.subplot(testlen//2, 8, i * 8 + 8)
+        for n in range(12):
+            plt.subplot(testlen//2, 12, i * 12 + n + 1)
     if not os.path.isdir(opt.plots_dir):
         os.mkdir(opt.plots_dir)
     if not os.path.isdir(os.path.join(opt.plots_dir, opt.name)):
@@ -142,42 +136,55 @@ if __name__ == '__main__':
 
         # cache our model every <save_epoch_freq> epochs
         if epoch % opt.save_epoch_freq == 0:
-            save_count = (save_count + 1) % 10
-            save_suffix = 'save_{}' .format(save_count)
+            #save_count = (save_count + 1) % 10
+            save_suffix = 'save'  #save_{}' .format(save_count)
             print('{} - {} - saving the model at the end of epoch {}, iters {}'.format(opt.name, save_suffix, epoch, total_iters))
             model.save_networks(save_suffix)
 
             # Plot intermediate results
             plt.figure('test merge')
             model.set_input(model_test_input)
-            test_results, recon_results, iden_results = model.runG()
+            test_results, recon_results, iden_results,\
+            test_results_raw, _, iden_results_raw \
+                = model.runG()
             test_results = test_results.detach().cpu()
             recon_results = recon_results.detach().cpu()
             iden_results = iden_results.detach().cpu()
+            test_results_raw = test_results_raw.detach().cpu()
+            #recon_results_raw = recon_results_raw.detach().cpu()
+            iden_results_raw = iden_results_raw.detach().cpu()
             for i in range(testlen // 2):
-                plt.subplot(testlen // 2, 8, 8 * i + 1)
+                plt.subplot(testlen // 2, 12, 12 * i + 1)
                 plt.imshow(tensor2im(model.real_G[i, 0].detach().cpu().permute([1, 2, 0])))
-                plt.subplot(testlen // 2, 8, 8 * i + 2)
+                plt.subplot(testlen // 2, 12, 12 * i + 2)
                 plt.imshow(tensor2im(model.real_G[i, 1].detach().cpu().permute([1, 2, 0])))
-                plt.subplot(testlen // 2, 8, 8 * i + 3)
+                plt.subplot(testlen // 2, 12, 12 * i + 3)
+                plt.imshow(tensor2im(test_results_raw[i, 0].permute([1, 2, 0])))
+                plt.subplot(testlen // 2, 12, 12 * i + 4)
+                plt.imshow(tensor2im(test_results_raw[i, 1].permute([1, 2, 0])))
+                plt.subplot(testlen // 2, 12, 12 * i + 5)
                 plt.imshow(tensor2im(test_results[i, 0].permute([1, 2, 0])))
-                plt.subplot(testlen // 2, 8, 8 * i + 4)
+                plt.subplot(testlen // 2, 12, 12 * i + 6)
                 plt.imshow(tensor2im(test_results[i, 1].permute([1, 2, 0])))
-                plt.subplot(testlen // 2, 8, 8 * i + 5)
+                plt.subplot(testlen // 2, 12, 12 * i + 7)
                 plt.imshow(tensor2im(recon_results[i, 0].permute([1, 2, 0])))
-                plt.subplot(testlen // 2, 8, 8 * i + 6)
+                plt.subplot(testlen // 2, 12, 12 * i + 8)
                 plt.imshow(tensor2im(recon_results[i, 1].permute([1, 2, 0])))
-                plt.subplot(testlen // 2, 8, 8 * i + 7)
+                plt.subplot(testlen // 2, 12, 12 * i + 9)
+                plt.imshow(tensor2im(iden_results_raw[2 * i].permute([1, 2, 0])))
+                plt.subplot(testlen // 2, 12, 12 * i + 10)
+                plt.imshow(tensor2im(iden_results_raw[2 * i + 1].permute([1, 2, 0])))
+                plt.subplot(testlen // 2, 12, 12 * i + 11)
                 plt.imshow(tensor2im(iden_results[2 * i].permute([1, 2, 0])))
-                plt.subplot(testlen // 2, 8, 8 * i + 8)
+                plt.subplot(testlen // 2, 12, 12 * i + 12)
                 plt.imshow(tensor2im(iden_results[2 * i + 1].permute([1, 2, 0])))
-            plt.suptitle('Merge epoch %d' % epoch, fontsize=12)
-            plt.savefig(os.path.join(opt.plots_dir, opt.name, 'epoch_%d.png' % epoch))
+            plt.suptitle('{}: Merge epoch {}'.format(opt.name, epoch), fontsize=12)
+            plt.savefig(os.path.join(opt.plots_dir, opt.name, 'epoch_{}.png'.format(epoch)))
 
         print('End of epoch {} / {} \t Time Taken: {:d} sec'.format(epoch, opt.epochs, int(time.time() - epoch_start_time)))
 
     print('saving the model at the end of epoch {}, iters {}'.format(epoch, total_iters))
-    save_suffix = 'save_{}_last'.format(save_count)
+    save_suffix = 'save'  #'save_{}'.format(save_count)
     model.save_networks(save_suffix)
     print('DONE')
 
