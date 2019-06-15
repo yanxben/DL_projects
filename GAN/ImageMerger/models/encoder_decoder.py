@@ -385,7 +385,8 @@ class Generator(nn.Module):
         x2 = x[:, 1, :, :, :]
 
         if mode is None or mode == 0:
-            x1_A = x1 if not self.mask_input else torch.zeros_like(x1)
+            x1_A = x1 if not self.mask_input else \
+                       torch.where(mask_in1[:, 1].unsqueeze(1).expand_as(x1) > 0.5, x1, torch.zeros_like(x1))
             x1_A = torch.cat((x1_A, mask_in1), dim=1)
             x2_B = torch.cat((x2, mask_in2), dim=1)
             e_x1_A = self.E_A(x1_A, extract=self.extract)
@@ -399,7 +400,8 @@ class Generator(nn.Module):
                 z1[-1] = self.Merger(z1[-1].view(-1, self.E_A.bottom_features + self.E_B.bottom_features))
             y1 = self.Decoder(z1, use_activation=use_activation)
         if mode is None or mode == 1:
-            x2_A = x2 if not self.mask_input else torch.zeros_like(x2)
+            x2_A = x2 if not self.mask_input else \
+                       torch.where(mask_in2[:, 1].unsqueeze(1).expand_as(x2) > 0.5, x2, torch.zeros_like(x2))
             x2_A = torch.cat((x2_A, mask_in2), dim=1)
             x1_B = torch.cat((x1, mask_in1), dim=1)
             e_x2_A = self.E_A(x2_A, extract=self.extract)
@@ -530,7 +532,8 @@ class GeneratorMunit(nn.Module):
         x2 = x[:, 1, :, :, :]
 
         if mode is None or mode == 0:
-            x1_A = x1 if not self.mask_input else torch.zeros_like(x1)
+            x1_A = x1 if not self.mask_input else \
+                       torch.where(mask_in1[:,1].unsqueeze(1).expand_as(x1) > 0.5, x1, torch.zeros_like(x1))
             x1_A = torch.cat((x1_A, mask_in1), dim=1)
             x2_B = torch.cat((x2, mask_in2), dim=1)
             e_x1_A = self.E_A(x1_A)
@@ -544,7 +547,8 @@ class GeneratorMunit(nn.Module):
                 #z1[-1] = self.Merger(z1[-1].view(-1, self.E_A.bottom_features + self.E_B.bottom_features))
             y1 = self.Decoder(z1)
         if mode is None or mode == 1:
-            x2_A = x2 if not self.mask_input else torch.zeros_like(x2)
+            x2_A = x2 if not self.mask_input else \
+                       torch.where(mask_in2[:,1].unsqueeze(1).expand_as(x2) > 0.5, x2, torch.zeros_like(x2))
             x2_A = torch.cat((x2_A, mask_in2), dim=1)
             x1_B = torch.cat((x1, mask_in1), dim=1)
             e_x2_A = self.E_A(x2_A)
