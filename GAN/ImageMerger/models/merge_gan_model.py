@@ -1,3 +1,4 @@
+import os
 import torch
 import itertools
 from .base_model import BaseModel
@@ -128,7 +129,9 @@ class mergeganmodel(BaseModel):
             self.optimizers.append(self.optimizer_ReID)
 
         if self.opt.load:
-            self.load_networks(self.opt.load_dir, self.opt.load_suffix)
+            load_dir = self.opt.load_dir if self.opt.load_dir is not None else \
+                os.path.join(self.opt.checkpoints_dir, self.opt.name)
+            self.load_networks(load_dir, self.opt.load_suffix)
 
     def set_input(self, model_input):
         """Unpack input data from the dataloader and perform necessary pre-processing steps.
@@ -138,8 +141,8 @@ class mergeganmodel(BaseModel):
         """
         # We separate the train domain to 2 groups.
         # Real_G are training images for the generator.
-        # Real_D are reference images for the descriminator.
-        # This is crucial so that the descriminator doesn't learn to focus on learning the real image and detect
+        # Real_D are reference images for the discriminator.
+        # This is crucial so that the discriminator doesn't learn to focus on learning the real image and detect
         # that it was altered.
 
         self.real_G = model_input['real_G'].clone()  # image pairs for generator
