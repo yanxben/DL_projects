@@ -37,6 +37,7 @@ class mergeganmodel(BaseModel):
             parser.add_argument('--reid_freq', type=int, default=1, help='')
             parser.add_argument('--pad', type=str, default='reflect', help='mode of padding zero/reflect')
             parser.add_argument('--normalization', type=str, default='instance', help='instance normalization or batch normalization [instance | batch | none]')
+			parser.add_argument('--munit_features', type=int, default=32, help='')
 
             parser.add_argument('--mask_input', dest='mask_input', action='store_true', help='mask input')
             parser.add_argument('--mask_output', dest='mask_output', action='store_true', help='mask output')
@@ -87,14 +88,14 @@ class mergeganmodel(BaseModel):
         if self.opt.model_config == 'light':
             self.netGen = encoder_decoder.Generator(opt.input_nc + (2 if opt.background else 0), opt.input_nc,
                                                     opt.e1_conv_nc, opt.e2_conv_nc, opt.last_conv_nc, opt.input_size,
-                                                    opt.depth, extract=[1, 3, opt.depth], normalization=opt.normalization,
+                                                    opt.depth, extract=[3, opt.depth], normalization=opt.normalization,
                                                     mask_input=opt.mask_input).to(self.device)
         elif self.opt.model_config == 'heavy':
             self.netGen = encoder_decoder.GeneratorHeavy(opt.input_nc + (2 if opt.background else 0), opt.input_nc,
                                                     opt.e1_conv_nc, opt.e2_conv_nc, opt.last_conv_nc, opt.input_size,
                                                     opt.depth, extract=[2, opt.depth], pad=opt.pad, normalization=opt.normalization).to(self.device)
         elif self.opt.model_config == 'munit':
-            self.netGen = encoder_decoder.GeneratorMunit(opt.input_nc + (2 if opt.background else 0), opt.input_nc,
+            self.netGen = encoder_decoder.GeneratorMunit(opt.input_nc + (2 if opt.background else 0), opt.input_nc, opt.munit_features,
                                                          opt.e1_conv_nc, opt.e2_conv_nc, opt.last_conv_nc, opt.input_size,
                                                          opt.depth, extract=None, normalization=opt.normalization,
                                                          mask_input=opt.mask_input).to(self.device)
@@ -398,18 +399,26 @@ class mergeganmodel(BaseModel):
 
         # Get results
         with torch.no_grad():
-            test_results = self.netGen(real_G, mask_in=mask_G)
-            recon_results = self.netGen(test_results, mask_in=mask_G)
+            test_results_raw = self.netGen(real_G, mask_in=mask_G)
+            if self.opt.mask_output:
+                test_results = torch.where(self.mask_G >= .5, test_results_raw, real_G)
+            else:
+                test_results = test_results_raw
 
-            iden_results = self.netGen(
+            recon_results_raw = self.netGen(test_results, mask_in=mask_G)
+            if self.opt.mask_output:
+                recon_results = torch.where(self.mask_G >= .5, recon_results_raw, test_results)
+            else:
+                recon_results = recon_results_raw
+
+            iden_results_raw = self.netGen(
                 real_G.reshape(2*N, 1, C, H, W).expand(2*N, 2, C, H, W),
                 mask_in=mask_G.reshape(2*N, C, H, W),
                 mode=self.A
             )
-
             if self.opt.mask_output:
-                test_results = torch.where(mask_G >= .5, test_results, real_G)
-                recon_results = torch.where(mask_G >= .5, recon_results, test_results)
-                iden_results = torch.where(mask_G.reshape(2*N, C, H, W) >= .5, iden_results, real_G.reshape(2*N, C, H, W))
+                iden_results = torch.where(mask_G.reshape(2*N, C, H, W) >= .5, iden_results_raw, real_G.reshape(2*N, C, H, W))
+            else:
+                iden_results = iden_results_raw
 
-        return test_results, recon_results, iden_results
+        return test_results, recon_results, iden_results, test_results_raw, recon_results_raw, iden_results_raw
