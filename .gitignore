@@ -3,8 +3,10 @@
 data/
 checkpoints/
 
-#Image merger
+# Image merger
 */ImageMerger/plots/
+*/ImageMerger/taudl/
+*/ImageMerger/plots_taudl/
 
 # FourInRow
 */FourInRow/plots/

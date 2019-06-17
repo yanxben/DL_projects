@@ -38,7 +38,7 @@ class mergeganmodel(BaseModel):
             parser.add_argument('--reid_freq', type=int, default=1, help='')
             parser.add_argument('--pad', type=str, default='reflect', help='mode of padding zero/reflect')
             parser.add_argument('--normalization', type=str, default='instance', help='instance normalization or batch normalization [instance | batch | none]')
-			parser.add_argument('--munit_features', type=int, default=32, help='')
+            parser.add_argument('--munit_features', type=int, default=32, help='')
 
             parser.add_argument('--mask_input', dest='mask_input', action='store_true', help='mask input')
             parser.add_argument('--mask_output', dest='mask_output', action='store_true', help='mask output')
