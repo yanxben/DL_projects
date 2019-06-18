@@ -20,6 +20,7 @@ class BaseOptions():
         """Define the common options that are used in both training and test."""
         # basic parameters
         parser.add_argument('--caltech_path', type=str, default=None, help='path to caltech data (optional)')
+        parser.add_argument('--caltech_version', type=int, default=1, help='version of caltech dataset: 1-2010, 2-2011')
         parser.add_argument('--data_mode', type=str, default='range', help='mode fore data read. in (range, cropped)')
         parser.add_argument('--data_size', type=int, default=None, help='size of data (int). None means all data')
         parser.add_argument('--name', type=str, default='experiment_name', help='name of the experiment. It decides where to store samples and models')

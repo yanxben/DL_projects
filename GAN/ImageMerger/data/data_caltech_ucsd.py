@@ -94,7 +94,7 @@ def load_caltech_data(path, imsize=128, type='pickle', mode='cropped', min_count
                 image = skimage.io.imread(image_path)
                 H, W, _ = image.shape
 
-                if type=='mat':
+                if type == 'mat':
                     annotation = loadmat(annotation_path)
                 else:
                     with open(annotation_path, 'rb') as f:
@@ -124,8 +124,8 @@ def load_caltech_data(path, imsize=128, type='pickle', mode='cropped', min_count
                 mask_delta[max(-top,0):min(delta, H-top), max(-left,0):min(delta, W-left)] = \
                     seg[max(0,top):min(top+delta, H), max(0,left):min(left+delta, W)]
 
-                #images[n] = scipy.misc.imresize(image_delta, [modesize, modesize, 3]).transpose(2, 0, 1) / 255
-                images[n] = skimage.transform.resize(mask_delta, [modesize, modesize], anti_aliasing=True, preserve_range=True)
+                # images[n] = scipy.misc.imresize(image_delta, [modesize, modesize, 3]).transpose(2, 0, 1) / 255
+                images[n] = skimage.transform.resize(image_delta, [modesize, modesize], anti_aliasing=True, preserve_range=True).transpose(2, 0, 1) / 255
                 masks[n] = skimage.transform.resize(mask_delta, [modesize, modesize], anti_aliasing=True, preserve_range=True)
                 masks[n] = np.where(masks[n] > 0.5, np.ones_like(masks[n]), np.zeros_like(masks[n]))
                 # plt.subplot(2, 2, 1)
@@ -170,7 +170,9 @@ def load_caltech_data(path, imsize=128, type='pickle', mode='cropped', min_count
     return images, masks, labels, bboxes, testset
 
 
-def create_dataset_caltech_ucsd(path, batch_size, imsize=128, type='pickle', mode='cropped', size=None, testset=None):
+def create_dataset_caltech_ucsd(path, batch_size, imsize=128, type='pickle', mode='cropped', size=None, testset=None, version=1):
+    dirname = 'Caltech-UCSD-Birds-200' if version==1 else 'CUB_200_2011'
+    path = os.path.join(path, dirname)
     images, masks, labels, bboxes, testset = load_caltech_data(path, imsize, type, mode, size=size, testset=testset)
 
     caltech_data = np.concatenate([images, masks], axis=1).astype(np.float32)
@@ -181,6 +183,7 @@ def create_dataset_caltech_ucsd(path, batch_size, imsize=128, type='pickle', mod
         testset['images'] = torch.from_numpy(np.concatenate([testset['images'], testset['masks']], axis=1).astype(np.float32))
         testset['labels'] = torch.from_numpy(testset['labels'].astype(np.int32))
         testset.pop('masks')
+
     return dataloader, torch.from_numpy(caltech_data), {'labels': torch.from_numpy(labels.astype(np.int64)), 'bboxes': bboxes}, testset
 
 
