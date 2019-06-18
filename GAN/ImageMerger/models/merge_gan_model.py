@@ -28,6 +28,8 @@ class mergeganmodel(BaseModel):
         parser.set_defaults(no_dropout=True)  # default CycleGAN did not use dropout
         if is_train:
             parser.add_argument('--model_config', type=str, default='light', help='type of model light/heavy/munit')
+            parser.add_argument('--disc_config', type=str, default='original', help='type of discriminator original')
+            parser.add_argument('--reid_config', type=str, default='original', help='type of ReID-discriminator original')
 
             parser.add_argument('--last_conv_nc', type=int, default=512, help='')
             parser.add_argument('--e1_conv_nc', type=int, default=512, help='')
@@ -49,6 +51,7 @@ class mergeganmodel(BaseModel):
             parser.add_argument('--mask_ReID', dest='mask_ReID', action='store_true', help='use mask before ReID')
             parser.add_argument('--mask_ReID_zero', dest='mask_ReID_zero', action='store_true', help='use mask before ReID')
             parser.add_argument('--ReID_mean', dest='ReID_mean', action='store_true', help='compare ReID on class mean')
+            parser.add_argument('--ReID_margin', type=int, default=1, help='')
 
             parser.add_argument('--lambda_G1', type=float, default=0.5,
                                 help='weight for recreation loss1')
@@ -85,6 +88,7 @@ class mergeganmodel(BaseModel):
         # Define networks (both Generators and discriminators)
         self.A = 0
         self.B = 1
+
         # Define Generator
         if self.opt.model_config == 'light':
             self.netGen = encoder_decoder.Generator(opt.input_nc + (2 if opt.background else 0), opt.input_nc,
@@ -100,13 +104,20 @@ class mergeganmodel(BaseModel):
                                                          opt.e1_conv_nc, opt.e2_conv_nc, opt.last_conv_nc, opt.input_size,
                                                          opt.depth, extract=None, normalization=opt.normalization,
                                                          mask_input=opt.mask_input).to(self.device)
+        elif self.opt.model_config == 'adain':
+            self.netGen = encoder_decoder.GeneratorAdaIN(opt.input_nc + (2 if opt.background else 0), opt.input_nc,
+                                                         {'dim': opt.munit_features, 'style_dim': 256,
+                                                          'n_downsample': opt.depth, 'n_res': 3, 'activ': 'lrelu',
+                                                          'pad_type': 'zero', 'mlp_dim': 256, 'mask_input': opt.mask_input}).to(self.device)
 
         # Define Discriminators
         if self.isTrain:
-            self.netDisc = encoder_decoder.Discriminator(opt.input_nc, opt.last_conv_nc, opt.input_size, opt.depth,
-                                                         normalization=opt.normalization).to(self.device)
-            self.netReID = encoder_decoder.DiscriminatorReID(opt.input_nc, opt.last_conv_nc, opt.input_size, opt.depth,
-                                                             out_features=opt.reid_features, normalization=opt.normalization).to(self.device)
+            if self.opt.disc_config == 'original':
+                self.netDisc = encoder_decoder.Discriminator(opt.input_nc, opt.last_conv_nc, opt.input_size, opt.depth,
+                                                             normalization=opt.normalization).to(self.device)
+            if self.opt.reid_config == 'original':
+                self.netReID = encoder_decoder.DiscriminatorReID(opt.input_nc, opt.last_conv_nc, opt.input_size, opt.depth,
+                                                                 out_features=opt.reid_features, normalization=opt.normalization).to(self.device)
 
             if opt.ReID_mean:
                 self.real_a_embed_mean = dict()
@@ -116,7 +127,7 @@ class mergeganmodel(BaseModel):
         if self.isTrain:
             # Define loss functions
             self.criterionGAN = networks.GANLoss(opt.gan_mode).to(self.device)  # define GAN loss
-            self.criterionReID1 = torch.nn.TripletMarginLoss()  # Define Re-Identification loss for triplet
+            self.criterionReID1 = torch.nn.TripletMarginLoss(opt.ReID_margin)  # Define Re-Identification loss for triplet
             self.criterionReID2 = torch.nn.PairwiseDistance()   # Define Re-Identification loss for pair
             self.criterionBackground = torch.nn.L1Loss()
             self.criterionCycle = torch.nn.L1Loss()
@@ -133,7 +144,7 @@ class mergeganmodel(BaseModel):
                 os.path.join(self.opt.checkpoints_dir, self.opt.name)
             self.load_networks(load_dir, self.opt.load_suffix)
 
-    def set_input(self, model_input):
+    def set_input(self, model_input, mode):
         """Unpack input data from the dataloader and perform necessary pre-processing steps.
 
         Parameters:
@@ -151,6 +162,13 @@ class mergeganmodel(BaseModel):
         self.real_n = model_input['real_n'].clone()  # negative images for ReID
         if self.opt.ReID_mean:
             self.real_a_labels = model_input['real_a_labels'].clone()  # anchor images for ReID
+
+        if mode == 'mix':
+            self.real_G = self.real_G.reshape([-1, 2, 3, self.opt.input_size, self.opt.input_size])
+        elif mode == 'recon':
+            self.real_G = self.real_G.reshape([-1, 2, 3, self.opt.input_size, self.opt.input_size])
+            self.real_G[:,0] = self.real_a
+
         N1, _, C1, H1, W1 = self.real_G.shape
         N2, C2, H2, W2 = self.real_D.shape
         N3, C3, H3, W3 = self.real_a.shape
@@ -158,13 +176,23 @@ class mergeganmodel(BaseModel):
         if self.opt.background:
             if not self.opt.attention:
                 self.mask_G = model_input['mask_G'].clone()
-                self.mask_G = self.mask_G.expand_as(self.real_G)
                 self.mask_D = model_input['mask_D'].clone()
-                self.mask_D = self.mask_D.expand_as(self.real_D)
                 self.mask_a = model_input['mask_a'].clone()  # anchor images for ReID
-                self.mask_a = self.mask_a.expand_as(self.real_a)
                 self.mask_n = model_input['mask_n'].clone()  # negative images for ReID
-                self.mask_n = self.mask_n.expand_as(self.real_n)
+                if mode == 'mix':
+                    self.mask_G = self.mask_G.reshape([-1, 2, 1, self.opt.input_size, self.opt.input_size]).expand_as(self.real_G)
+                    self.mask_D = self.mask_D.unsqueeze(1).expand_as(self.real_D)
+                    self.mask_a = self.mask_a.unsqueeze(1).expand_as(self.real_a)
+                    self.mask_n = self.mask_n.unsqueeze(1).expand_as(self.real_n)
+                elif mode == 'recon':
+                    self.mask_G = self.mask_G.reshape([-1, 2, 1, self.opt.input_size, self.opt.input_size])
+                    self.mask_G[:,0] = self.mask_a.unsqueeze(1)
+                    self.mask_G = self.mask_G.expand_as(self.real_G)
+                    #self.mask_G = torch.cat([self.mask_G.unsqueeze(1), self.mask_a.unsqueeze(1)], dim=1).expand_as(self.real_G)
+                    self.mask_D = self.mask_D.unsqueeze(1).expand_as(self.real_D)
+                    self.mask_a = self.mask_a.unsqueeze(1).expand_as(self.real_a)
+                    self.mask_n = self.mask_n.unsqueeze(1).expand_as(self.real_n)
+
 
         if self.opt.preprocess_mask:
             self.preprocess()
@@ -217,7 +245,14 @@ class mergeganmodel(BaseModel):
         self.mask_a = torch.where(self.mask_a >= 0.5, torch.ones_like(self.mask_a), torch.zeros_like(self.mask_a))
         self.mask_n = torch.where(self.mask_n >= 0.5, torch.ones_like(self.mask_n), torch.zeros_like(self.mask_n))
 
-    def forward(self):
+    def forward(self, mode):
+        """Run forward pass; called by <optimize_parameters>."""
+        self.forward_1()
+        if mode == 'mix':
+            self.forward_2()
+            # self.forward_3()
+
+    def forward_1(self):
         """Run forward pass; called by <optimize_parameters>."""
         if self.opt.background:
             if self.opt.attention:
@@ -229,14 +264,19 @@ class mergeganmodel(BaseModel):
         else:
             self.fake_G = self.netGen(self.real_G)  # G(A)
 
+    def forward_2(self):
         # Recreate original images from the fake images
-        if self.opt.background and not self.opt.attention:
-            self.rec_G_1 = self.netGen(self.fake_G, mask_in=self.mask_G)   # G(G(A))
-            if self.opt.mask_output:
-                self.rec_G_1 = torch.where(self.mask_G >= .5, self.rec_G_1, self.fake_G)
+        if self.opt.background:
+            if self.opt.attention:
+                self.rec_G, _ = self.netGen(self.fake_G, mask_out=True)  # G(A)
+            else:
+                self.rec_G = self.netGen(self.fake_G, mask_in=self.mask_G)   # G(G(A))
+                if self.opt.mask_output:
+                    self.rec_G = torch.where(self.mask_G >= .5, self.rec_G, self.fake_G)
         else:
-            self.rec_G_1 = self.netGen(self.fake_G)  # G(G(A))
+            self.rec_G = self.netGen(self.fake_G)  # G(G(A))
 
+    def forward_3(self):
         # Recreate original images from fake image and real image as second
         if self.opt.background and not self.opt.attention:
             self.rec_G_2A = self.netGen(
@@ -256,10 +296,83 @@ class mergeganmodel(BaseModel):
                 torch.cat((self.real_G[:, self.B, :, :, :].unsqueeze(1), self.fake_G[:, self.B, :, :, :].unsqueeze(1)), dim=1),
                 mode=self.B)  # G(G(A))
 
+    def optimize_G(self, mode):
+        """
+        Calculate the loss for generator G
+        """
+        _, _, C, H, W = self.fake_G.shape
+
+        # GAN loss D(G(A,B))
+        if self.opt.Disc:
+            fake_D = self.fake_G.reshape(-1, C, H, W)
+            self.loss_GDisc = self.criterionGAN(self.netDisc(fake_D), True) * self.opt.lambda_Disc
+        else:
+            self.loss_GDisc = 0
+
+        # ReID loss ReID(anchor, G(A,B))
+        if self.opt.ReID:
+            if self.opt.mask_ReID:
+                if self.opt.mask_ReID_zero:
+                    real_a_embed = self.netReID(torch.where(self.mask_a >= .5, self.real_a, torch.zeros_like(self.real_a)))
+                    fake_p_embed = self.netReID(torch.where(self.mask_G[:,self.A] >= .5, self.fake_G[:,self.A], torch.zeros_like(self.fake_G[:,self.A])))
+                else:
+                    real_a_embed = self.netReID(self.real_a)
+                    fake_p_embed = self.netReID(torch.where(self.mask_G[:, self.A] >= .5, self.fake_G[:, self.A], self.real_G[:, self.A]))
+            else:
+                real_a_embed = self.netReID(self.real_a)
+                fake_p_embed = self.netReID(self.fake_G[:, self.A])
+
+            if self.opt.ReID_mean:  # compare the encoding to the mean of the class instead of only the anchor
+                for i in range(real_a_embed.shape[0]):
+                    self.real_a_embed_mean[int(self.real_a_labels[i])] = 0.7*self.real_a_embed_mean[int(self.real_a_labels[i])] + 0.3*real_a_embed[i].detach()
+                for i in range(real_a_embed.shape[0]):
+                    real_a_embed[i] = self.real_a_embed_mean[int(self.real_a_labels[i])]
+            self.loss_GReID = torch.mean(self.criterionReID2(real_a_embed, fake_p_embed)) * self.opt.lambda_ReID
+        else:
+            self.loss_GReID = 0
+
+        # Clip Discriminator loss for stability
+        if self.opt.Disc or self.opt.ReID:
+            loss_GD = self.loss_GDisc + self.loss_GReID
+            self.optimizer_Gen.zero_grad()  # set G gradients to zero
+            loss_GD.backward(retain_graph=True)
+            torch.nn.utils.clip_grad_value_(self.netGen.parameters(), 1)
+            self.optimizer_Gen.step()
+
+        # GAN Background loss
+        if self.opt.background:
+            self.loss_G_background = self.criterionBackground(
+                self.real_G.reshape(-1, C, H, W) * (1 - self.mask_G.reshape(-1, C, H, W)),
+                self.fake_G.reshape(-1, C, H, W) * (1 - self.mask_G.reshape(-1, C, H, W))) \
+                                     * self.opt.lambda_Background
+        else:
+            self.loss_G_background = 0
+
+        # Forward cycle loss || G(G(A)) - A||
+        if mode == 'mix':
+            self.loss_cycle_1 = self.criterionCycle(self.rec_G, self.real_G) * self.opt.lambda_G1
+            self.loss_cycle_2A = 0 #self.criterionCycle(self.rec_G_2A, self.real_G[:, self.A, :, :, :]) * self.opt.lambda_G2
+            self.loss_cycle_2B = 0 #self.criterionCycle(self.rec_G_2B, self.real_G[:, self.B, :, :, :]) * self.opt.lambda_G2
+        elif mode == 'recon':
+            self.loss_cycle_1 = self.criterionCycle(self.fake_G, self.real_G) * self.opt.lambda_G1
+            self.loss_cycle_2A = 0
+            self.loss_cycle_2B = 0
+        else:
+            self.loss_cycle_1 = 0
+            self.loss_cycle_2A = 0
+            self.loss_cycle_2B = 0
+
+        # combined loss and calculate gradients
+        self.loss_G = self.loss_G_background + self.loss_cycle_1 + self.loss_cycle_2A + self.loss_cycle_2B
+        self.optimizer_Gen.zero_grad()  # set G gradients to zero
+        self.loss_G.backward()
+        self.optimizer_Gen.step()  # update G weights
+
     def optimize_D(self):
         """
-        Calculate GAN + ReID loss for the discriminators and performs weight updata.
+        Calculate GAN + ReID loss for the discriminators and performs weight update.
         """
+        # print('optimize D')
         self.optimizer_Disc.zero_grad()     # set D gradients to zero
         self.optimizer_ReID.zero_grad()     # set D gradients to zero
 
@@ -267,6 +380,7 @@ class mergeganmodel(BaseModel):
 
         # Disc
         if self.opt.Disc:
+            # print('Disc')
             # Real
             pred_real = self.netDisc(self.real_D)
             loss_D_real = self.criterionGAN(pred_real, True)
@@ -280,6 +394,7 @@ class mergeganmodel(BaseModel):
 
         # ReID
         if self.opt.ReID:
+            # print('ReID')
             if self.opt.mask_ReID:
                 if self.opt.mask_ReID_zero:
                     real_a_embed = self.netReID(torch.where(self.mask_a >= .5, self.real_a, torch.zeros_like(self.real_a)))
@@ -310,76 +425,14 @@ class mergeganmodel(BaseModel):
         if self.opt.ReID:
             self.optimizer_ReID.step()      # update ReID weights
 
-    def optimize_G(self, reid=True):
-        """
-        Calculate the loss for generator G
-        """
-        _, _, C, H, W = self.fake_G.shape
-
-        # GAN loss D(G(A,B))
-        if self.opt.Disc:
-            fake_D = self.fake_G.reshape(-1, C, H, W)
-            self.loss_GDisc = self.criterionGAN(self.netDisc(fake_D), True) * self.opt.lambda_Disc
-        else:
-            self.loss_GDisc = 0
-
-        # ReID loss ReID(anchor, G(A,B))
-        if self.opt.ReID and reid:
-            if self.opt.mask_ReID:
-                if self.opt.mask_ReID_zero:
-                    real_a_embed = self.netReID(torch.where(self.mask_a >= .5, self.real_a, torch.zeros_like(self.real_a)))
-                    fake_p_embed = self.netReID(torch.where(self.mask_G[:,self.A] >= .5, self.fake_G[:,self.A], torch.zeros_like(self.fake_G[:,self.A])))
-                else:
-                    real_a_embed = self.netReID(self.real_a)
-                    fake_p_embed = self.netReID(torch.where(self.mask_G[:, self.A] >= .5, self.fake_G[:, self.A], self.real_G[:, self.A]))
-            else:
-                real_a_embed = self.netReID(self.real_a)
-                fake_p_embed = self.netReID(self.fake_G[:,self.A])
-
-            if self.opt.ReID_mean:  # compare the encoding to the mean of the class instead of only the anchor
-                for i in range(real_a_embed.shape[0]):
-                    self.real_a_embed_mean[int(self.real_a_labels[i])] = 0.7*self.real_a_embed_mean[int(self.real_a_labels[i])] + 0.3*real_a_embed[i].detach()
-                for i in range(real_a_embed.shape[0]):
-                    real_a_embed[i] = self.real_a_embed_mean[int(self.real_a_labels[i])]
-            self.loss_GReID = torch.mean(self.criterionReID2(real_a_embed, fake_p_embed)) * self.opt.lambda_ReID
-        else:
-            self.loss_GReID = 0
-
-        if self.opt.Disc or (self.opt.ReID and reid):
-            loss_GD = self.loss_GDisc + self.loss_GReID
-            self.optimizer_Gen.zero_grad()  # set G gradients to zero
-            loss_GD.backward(retain_graph=True)
-            torch.nn.utils.clip_grad_value_(self.netGen.parameters(), 1)
-            self.optimizer_Gen.step()
-
-        # GAN Background loss
-        if self.opt.background:
-            self.loss_G_background = self.criterionBackground(
-                self.real_G.reshape(-1, C, H, W) * (1 - self.mask_G.reshape(-1, C, H, W)),
-                self.fake_G.reshape(-1, C, H, W) * (1 - self.mask_G.reshape(-1, C, H, W))) \
-                                     * self.opt.lambda_Background
-        else:
-            self.loss_G_background = 0
-
-        # Forward cycle loss || G(G(A)) - A||
-        self.loss_cycle_1 = self.criterionCycle(self.rec_G_1, self.real_G) * self.opt.lambda_G1
-        self.loss_cycle_2A = self.criterionCycle(self.rec_G_2A, self.real_G[:, self.A, :, :, :]) * self.opt.lambda_G2
-        self.loss_cycle_2B = self.criterionCycle(self.rec_G_2B, self.real_G[:, self.B, :, :, :]) * self.opt.lambda_G2
-
-        # combined loss and calculate gradients
-        self.loss_G = self.loss_GDisc + self.loss_GReID + self.loss_G_background + self.loss_cycle_1 + self.loss_cycle_2A + self.loss_cycle_2B
-        self.optimizer_Gen.zero_grad()  # set G gradients to zero
-        self.loss_G.backward()
-        self.optimizer_Gen.step()  # update G weights
-
-    def optimize_parameters(self, reid=True):
+    def optimize_parameters(self, mode):
         """Calculate losses, gradients, and update network weights; called in every training iteration"""
 
         # forward
-        self.forward()      # compute fake images and reconstruction images.
+        self.forward(mode)      # compute fake images and reconstruction images.
         # G
         self.set_requires_grad([self.netDisc, self.netReID], False)  # D require no gradients when optimizing G
-        self.optimize_G(reid)
+        self.optimize_G(mode)
         # D
         self.set_requires_grad([self.netDisc, self.netReID], True)
         self.optimize_D()

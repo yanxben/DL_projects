@@ -572,6 +572,117 @@ class GeneratorMunit(nn.Module):
         return y
 
 
+class GeneratorAdaIN(nn.Module):
+    # AdaIN auto-encoder architecture
+    def __init__(self, input_dim, output_dim, params):
+        super(GeneratorAdaIN, self).__init__()
+        dim = params['dim']
+        self.style_dim = params['style_dim']
+        n_downsample = params['n_downsample']
+        n_res = params['n_res']
+        activ = params['activ']
+        pad_type = params['pad_type']
+        self.mlp_dim = params['mlp_dim']
+        self.mask_input = params['mask_input']
+
+        from . import munit
+        # style encoder
+        self.enc_style = munit.StyleEncoder(4, input_dim, dim, self.style_dim, norm='none', activ=activ, pad_type=pad_type)
+
+        # content encoder
+        self.enc_content = munit.ContentEncoder(n_downsample, n_res, input_dim, dim, 'in', activ, pad_type=pad_type)
+        self.dec = munit.Decoder(n_downsample, n_res, self.enc_content.output_dim, output_dim, res_norm='adain', activ=activ, pad_type=pad_type)
+
+        # MLP to generate AdaIN parameters
+        self.mlp = munit.MLP(self.style_dim, self.get_num_adain_params(self.dec), self.mlp_dim, 3, norm='none', activ=activ)
+
+    def forward(self, x, mask_in=None, mode=None, use_activation=True):
+        N, B, C, H, W = x.shape
+        if mode is None:
+            mask_in1 = mask_in[:, 0, 0, :, :].unsqueeze(1)
+            mask_in2 = mask_in[:, 1, 0, :, :].unsqueeze(1)
+        else:
+            mask_in1 = mask_in[:, 0, :, :].unsqueeze(1)
+            mask_in2 = mask_in[:, 0, :, :].unsqueeze(1)
+
+        mask_in1 = torch.cat((mask_in1, 1 - mask_in1), dim=1)
+        mask_in2 = torch.cat((mask_in2, 1 - mask_in2), dim=1)
+
+        # reconstruct an image
+        x1 = x[:, 0]
+        x2 = x[:, 1]
+
+        #content1, style1 = self.encode(x1_A, x1_B)
+        #content2, style2 = self.encode(x2_A, x2_B)
+
+        if mode is None or mode == 0:
+            x1_A = x1 if not self.mask_input else \
+                torch.where(mask_in1[:, 1].unsqueeze(1).expand_as(x1) > 0.5, x1, torch.zeros_like(x1))
+            x1_A = torch.cat((x1_A, mask_in1), dim=1)
+            x2_B = torch.cat((x2, mask_in2), dim=1)
+            # print('x1_A {}'.format(x1_A.shape))
+            # print('x2_B {}'.format(x2_B.shape))
+            content1 = self.enc_content(x1_A)
+            style2 = self.enc_style(x2_B)
+            # print('content1 {}'.format(content1.shape))
+            # print('style2 {}'.format(style2.shape))
+            y1 = self.decode(content1, style2)
+            # print('y1 {}'.format(y1.shape))
+
+        if mode is None or mode == 1:
+            x2_A = x2 if not self.mask_input else \
+                torch.where(mask_in2[:, 1].unsqueeze(1).expand_as(x2) > 0.5, x2, torch.zeros_like(x2))
+            x2_A = torch.cat((x2_A, mask_in2), dim=1)
+            x1_B = torch.cat((x1, mask_in1), dim=1)
+
+            content2 = self.enc_content(x2_A)
+            style1 = self.enc_style(x1_B)
+            y2 = self.decode(content2, style1)
+
+        if mode is None:
+            y = torch.cat((y1.unsqueeze(1), y2.unsqueeze(1)), dim=1)
+        elif mode == 0:
+            y = y1
+        else:
+            y = y2
+
+        return y
+
+    def encode(self, images):
+        # encode an image to its content and style codes
+        style_fake = self.enc_style(images)
+        content = self.enc_content(images)
+        return content, style_fake
+
+    def decode(self, content, style):
+        # decode content and style codes to an image
+        # print([self.style_dim, self.get_num_adain_params(self.dec), self.mlp_dim])
+        adain_params = self.mlp(style)
+        # print('adain_params {}'.format(adain_params.shape))
+        self.assign_adain_params(adain_params, self.dec)
+        images = self.dec(content)
+        return images
+
+    def assign_adain_params(self, adain_params, model):
+        # assign the adain_params to the AdaIN layers in model
+        for m in model.modules():
+            if m.__class__.__name__ == "AdaptiveInstanceNorm2d":
+                mean = adain_params[:, :m.num_features]
+                std = adain_params[:, m.num_features:2*m.num_features]
+                m.bias = mean.contiguous().view(-1)
+                m.weight = std.contiguous().view(-1)
+                if adain_params.size(1) > 2*m.num_features:
+                    adain_params = adain_params[:, 2*m.num_features:]
+
+    def get_num_adain_params(self, model):
+        # return the number of AdaIN parameters needed by the model
+        num_adain_params = 0
+        for m in model.modules():
+            if m.__class__.__name__ == "AdaptiveInstanceNorm2d":
+                num_adain_params += 2*m.num_features
+        return num_adain_params
+
+
 class Discriminator(nn.Module):
     def __init__(self, input_nc, last_conv_nc, input_size, depth, normalization='instance'):
         super(Discriminator, self).__init__()

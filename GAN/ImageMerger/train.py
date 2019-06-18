@@ -15,7 +15,6 @@ import matplotlib.pyplot as plt
 import torch
 
 
-
 def tensor2im(t):
     return (t / 2) + 0.5
 
@@ -28,7 +27,8 @@ testset = ['Red_winged_Blackbird_0017_583846699', 'Yellow_headed_Blackbird_0009_
            'Lazuli_Bunting_0010_522399154', 'Painted_Bunting_0006_2862481106',
            'Gray_Catbird_0031_148467783', 'Purple_Finch_0006_2329434675',
            'American_Goldfinch_0004_155617438', 'Blue_Grosbeak_0008_2450854752',
-           'Green_Kingfisher_0002_228927324', 'Pied_Kingfisher_0002_1020026028']
+           'Green_Kingfisher_0002_228927324', 'Pied_Kingfisher_0002_1020026028',
+           'Eastern_Towhee_0004_2510292984', 'Dark_eyed_Junco_0005_416878483']
 
 if __name__ == '__main__':
     t0 = time.time()
@@ -41,35 +41,35 @@ if __name__ == '__main__':
         caltech_path = opt.caltech_path
     else:
         if socket.gethostname() == 'YABENN-P50':
-            caltech_path = 'C:/Datasets/Caltech-UCSD-Birds-200'
+            caltech_path = 'C:/Datasets'
         elif os.sys.platform == 'linux':
-            caltech_path = '/home/' + os.getlogin() + '/Datasets/Caltech-UCSD-Birds-200'
+            caltech_path = '/home/' + os.getlogin() + '/Datasets'
     _, caltech_data, caltech_meta, testset = create_dataset_caltech_ucsd(caltech_path, opt.batch_size, size=opt.data_size ,mode=opt.data_mode, imsize=opt.input_size, testset=testset)  # create a dataset given opt.dataset_mode and other options
 
     caltech_labels = caltech_meta['labels']
     caltech_bboxes = caltech_meta['bboxes']
 
     dataset_size, C, H, W = caltech_data.shape
-    print('The number of training epochs = %d' % (dataset_size // opt.batch_size))
+    print('The number of training iterations = %d' % (dataset_size // opt.batch_size))
     print('The number of training images = %d' % dataset_size)
 
     if opt.data_mode == 'range':
         testset['images'] = crop_data(testset['images'], testset['bboxes'], opt.input_size)
     testlen = testset['images'].shape[0]
 
-    model_test_input = {'real_G': testset['images'][:, :3, :, :].reshape([-1, 2, 3, opt.input_size, opt.input_size]),
-                        'mask_G': testset['images'][:, 3, :, :].unsqueeze(1).unsqueeze(1).reshape([-1, 2, 1, opt.input_size, opt.input_size]),
+    model_test_input = {'real_G': testset['images'][:, :3, :, :],
+                        'mask_G': testset['images'][:, 3, :, :],
                         'real_D': testset['images'][:, :3, :, :],
-                        'mask_D': testset['images'][:, 3, :, :].unsqueeze(1),
+                        'mask_D': testset['images'][:, 3, :, :],
                         'real_a': testset['images'][:testlen//2, :3, :, :],                 # Unused
-                        'mask_a': testset['images'][:testlen // 2, 3, :, :].unsqueeze(1),   # Unused
+                        'mask_a': testset['images'][:testlen//2, 3, :, :],     # Unused
                         'real_n': testset['images'][:testlen//2, :3, :, :],                 # Unused
-                        'mask_n': testset['images'][:testlen//2, 3, :, :].unsqueeze(1),     # Unused
+                        'mask_n': testset['images'][:testlen//2, 3, :, :],     # Unused
                         'real_a_labels': testset['labels'],  # anchor images for ReID
                         }
 
     plt.figure('test merge', figsize=(1920 / 100, 1080 / 100), dpi=100)
-    plt.figure('test reflect', figsize=(1920 / 100, 1080 / 100), dpi=100)
+    # plt.figure('test reflect', figsize=(1920 / 100, 1080 / 100), dpi=100)
 
     plt.figure('test merge')
     for i in range(testlen//2):
@@ -83,7 +83,10 @@ if __name__ == '__main__':
     total_iters = 0                # the total number of training iterations
     save_count = 0
     print('End of initialization. Time Taken: %d sec' % (time.time() - t0))
+
+    opt.train_scheduler = opt.train_scheduler.split(',')
     for epoch in range(opt.epoch_start, opt.epochs + 1):    # outer loop for different epochs; we save the model by <epoch_count>, <epoch_count>+<save_latest_freq>
+
         epoch_start_time = time.time()  # timer for entire epoch
         iter_data_time = time.time()    # timer for data loading per iteration
         epoch_iter = 0                  # the number of training iterations in current epoch, reset to 0 every epoch
@@ -94,6 +97,14 @@ if __name__ == '__main__':
             iter_start_time = time.time()  # timer for computation per iteration
             total_iters += 1
             epoch_iter += 1
+
+            if epoch <= opt.epochs_pretrain:
+                train_mode = opt.pretrain_mode
+            else:
+                train_mode = train_scheduler[0]
+                if train_mode == 'default':
+                    train_mode = opt.default_train_mode
+                train_scheduler = train_scheduler[1:] + [train_scheduler[0]]
 
             # Run train iteration
             batch_a = torch.LongTensor(opt.batch_size//2)
@@ -118,19 +129,19 @@ if __name__ == '__main__':
                 images_n = caltech_data[batch_n]
             labels_a = caltech_labels[batch_a]
 
-            model_input = {'real_G': images[:, :3, :, :].reshape([-1, 2, 3, opt.input_size, opt.input_size]),  # image pairs for generator
-                           'mask_G': images[:, 3, :, :].unsqueeze(1).unsqueeze(1).reshape([-1, 2, 1, opt.input_size, opt.input_size]),  # mask for real_G
-                           'real_D': images[:, :3, :, :],  # real images for discriminator
-                           'mask_D': images[:, 3, :, :].unsqueeze(1),  # mask for real_D
-                           'real_a': images_a[:, :3, :, :],  # anchor images for ReID
-                           'mask_a': images_a[:, 3, :, :].unsqueeze(1),  # mask for ReID
-                           'real_n': images_n[:, :3, :, :],  # negative images for ReID
-                           'mask_n': images_n[:, 3, :, :].unsqueeze(1),  # mask for ReID
-                           'real_a_labels': labels_a,  # anchor images for ReID
+            model_input = {'real_G': images[:, :3, :, :],   # image pairs for generator
+                           'mask_G': images[:, 3, :, :],    # mask for real_G
+                           'real_D': images[:, :3, :, :],   # real images for discriminator
+                           'mask_D': images[:, 3, :, :],    # mask for real_D
+                           'real_a': images_a[:, :3, :, :], # anchor images for ReID
+                           'mask_a': images_a[:, 3, :, :],  # mask for ReID
+                           'real_n': images_n[:, :3, :, :], # negative images for ReID
+                           'mask_n': images_n[:, 3, :, :],  # mask for ReID
+                           'real_a_labels': labels_a,       # anchor images for ReID
                            }
 
-            model.set_input(model_input)  # unpack data from dataset and apply preprocessing
-            model.optimize_parameters(reid=i % opt.reid_freq == 0)  # calculate loss functions, get gradients, update network weights
+            model.set_input(model_input, mode=train_mode)  # unpack data from dataset and apply preprocessing
+            model.optimize_parameters(mode=train_mode)  # calculate loss functions, get gradients, update network weights
 
             iter_data_time = time.time()
 
@@ -143,7 +154,7 @@ if __name__ == '__main__':
 
             # Plot intermediate results
             plt.figure('test merge')
-            model.set_input(model_test_input)
+            model.set_input(model_test_input, mode='mix')
             test_results, recon_results, iden_results,\
             test_results_raw, _, iden_results_raw \
                 = model.runG()

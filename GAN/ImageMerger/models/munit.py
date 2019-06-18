@@ -195,7 +195,7 @@ class StyleEncoder(nn.Module):
             dim *= 2
         for i in range(n_downsample - 2):
             self.model += [Conv2dBlock(dim, dim, 4, 2, 1, norm=norm, activation=activ, pad_type=pad_type)]
-        #self.model += [nn.AdaptiveAvgPool2d(1)] # global average pooling
+        self.model += [nn.AdaptiveAvgPool2d(1)] # global average pooling
         self.model += [nn.Conv2d(dim, style_dim, 1, 1, 0)]
         self.model = nn.Sequential(*self.model)
         self.output_dim = dim
@@ -255,7 +255,6 @@ class ResBlocks(nn.Module):
 
 class MLP(nn.Module):
     def __init__(self, input_dim, output_dim, dim, n_blk, norm='none', activ='relu'):
-
         super(MLP, self).__init__()
         self.model = []
         self.model += [LinearBlock(input_dim, dim, norm=norm, activation=activ)]
@@ -265,6 +264,8 @@ class MLP(nn.Module):
         self.model = nn.Sequential(*self.model)
 
     def forward(self, x):
+        # print('mlp x {}'.format(x.shape))
+        # print('mlp x.view {}'.format(x.view(x.size(0), -1).shape))
         return self.model(x.view(x.size(0), -1))
 
 ##################################################################################
