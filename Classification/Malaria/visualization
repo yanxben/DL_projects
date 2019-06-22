@@ -1,0 +1,36 @@
+import os
+import skimage
+import pandas
+import matplotlib.pyplot as plt
+
+data_path = '/media/yaniv/data2/datasets/Malaria'
+
+trainfile = pandas.read_csv(os.path.join(data_path, 'train_labels.csv'))
+
+train_0, train_1 = [], []
+for i in range(len(trainfile)):
+    if len(train_0) == 25 and len(train_1) == 25:
+        break
+    if len(train_0) < 25 and trainfile['infected'][i] == 0:
+        train_0.append(trainfile['filename'][i])
+    if len(train_1) < 25 and trainfile['infected'][i] == 1:
+        train_1.append(trainfile['filename'][i])
+
+
+plt.figure('not_infected')
+for i in range(5):
+    for j in range(5):
+        n = i * 5 + j
+        image = skimage.io.imread(os.path.join(data_path, 'train', train_0[n]))
+        plt.subplot(5, 5, n + 1)
+        plt.imshow(image)
+
+plt.figure('infected')
+for i in range(5):
+    for j in range(5):
+        n = i * 5 + j
+        image = skimage.io.imread(os.path.join(data_path, 'train', train_1[n]))
+        plt.subplot(5, 5, n + 1)
+        plt.imshow(image)
+
+print('done')
