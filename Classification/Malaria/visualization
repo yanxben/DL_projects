@@ -1,7 +1,12 @@
 import os
+
+import numpy as np
 import skimage
 import pandas
 import matplotlib.pyplot as plt
+
+import torch
+import torchvision
 
 data_path = '/media/yaniv/data2/datasets/Malaria'
 
@@ -17,20 +22,47 @@ for i in range(len(trainfile)):
         train_1.append(trainfile['filename'][i])
 
 
-plt.figure('not_infected')
-for i in range(5):
-    for j in range(5):
-        n = i * 5 + j
-        image = skimage.io.imread(os.path.join(data_path, 'train', train_0[n]))
-        plt.subplot(5, 5, n + 1)
-        plt.imshow(image)
+# plt.figure('not_infected')
+# for i in range(5):
+#     for j in range(5):
+#         n = i * 5 + j
+#         image = skimage.io.imread(os.path.join(data_path, 'train', train_0[n]))
+#         plt.subplot(5, 5, n + 1)
+#         plt.imshow(image)
+#
+# plt.figure('infected')
+# for i in range(5):
+#     for j in range(5):
+#         n = i * 5 + j
+#         image = skimage.io.imread(os.path.join(data_path, 'train', train_1[n]))
+#         plt.subplot(5, 5, n + 1)
+#         plt.imshow(image)
 
-plt.figure('infected')
-for i in range(5):
-    for j in range(5):
-        n = i * 5 + j
-        image = skimage.io.imread(os.path.join(data_path, 'train', train_1[n]))
-        plt.subplot(5, 5, n + 1)
-        plt.imshow(image)
 
+plt.figure('rotation')
+image = np.stack([skimage.io.imread(os.path.join(data_path, 'train', train_1[0])),
+                        skimage.io.imread(os.path.join(data_path, 'train', train_1[2])),
+                        skimage.io.imread(os.path.join(data_path, 'train', train_1[3]))], axis=0)
+image = torch.from_numpy(image).permute([0,3,1,2])
+
+transforms = torchvision.transforms.Compose([
+    torchvision.transforms.RandomHorizontalFlip(0.5),
+    torchvision.transforms.RandomRotation(0)
+])
+
+for j in range(10):
+
+    for i in range(3):
+        n = i * 10 + j
+        plt.subplot(3, 10, n + 1)
+        if j > 0:
+            image_pil = torchvision.transforms.functional.to_pil_image(image[i])
+            image_pil_rotated = transforms(image_pil)
+            image_rotated = torchvision.transforms.functional.to_tensor(image_pil_rotated)
+
+        else:
+            image_rotated = image[i]
+        plt.imshow(image_rotated.permute([1,2,0]))
+
+plt.show()
 print('done')
