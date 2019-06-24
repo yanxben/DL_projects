@@ -7,28 +7,28 @@ class ENCODER(nn.Module):
         self.encoder = nn.Sequential(
             nn.Conv2d(3,features, 3, 1, 1),
             nn.ReLU(True),
-            nn.BatchNorm2d(features),
+            nn.InstanceNorm2d(features),
             nn.MaxPool2d(2),
             nn.Conv2d(features, 64, 3, 1, 1),
             nn.ReLU(True),
-            nn.BatchNorm2d(64),
+            nn.InstanceNorm2d(64),
             nn.MaxPool2d(2),
-            nn.Dropout2d(0.2),
+            nn.Dropout2d(0.1),
             nn.Conv2d(64, 128, 3, 1, 1),
             nn.ReLU(True),
-            nn.BatchNorm2d(128),
+            nn.InstanceNorm2d(128),
             nn.MaxPool2d(2),
-            nn.Dropout2d(0.2),
+            nn.Dropout2d(0.1),
             nn.Conv2d(128, 256, 3, 1, 1),
             nn.ReLU(True),
-            nn.BatchNorm2d(256),
+            nn.InstanceNorm2d(256),
             nn.MaxPool2d(2),
-            nn.Dropout2d(0.2),
+            nn.Dropout2d(0.1),
             nn.Conv2d(256, 512, 3, 1, 1),
             nn.ReLU(True),
-            nn.BatchNorm2d(512),
+            nn.InstanceNorm2d(512),
             nn.MaxPool2d(2),
-            nn.Dropout2d(0.2)
+            nn.Dropout2d(0.1)
         )
 
     def forward(self, x):
@@ -71,10 +71,12 @@ class VGG(nn.Module):
         self.classifier = nn.Sequential(
             nn.Linear(512, 2048),
             nn.ReLU(True),
-            nn.Dropout(),
+            nn.InstanceNorm1d(2048),
+            nn.Dropout(0.3),
             nn.Linear(2048, 2048),
             nn.ReLU(True),
-            nn.Dropout(),
+            nn.InstanceNorm1d(2048),
+            nn.Dropout(0.3),
             nn.Linear(2048, num_classes),
         )
 

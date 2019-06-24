@@ -51,6 +51,7 @@ if __name__ == '__main__':
         running_loss_ae = 0
         train_size = 0
 
+        # Train
         model[m].train()
         if mode == 'VGG_EA':
             for batch_idx, batch_data in enumerate(data_validation, 1):
@@ -100,14 +101,14 @@ if __name__ == '__main__':
             (loss + lambda_AE * (loss_ae + loss_ae_val)).backward()  # Compute the gradient for each variable
             optimizer[m].step()  # Update the weights according to the computed gradient
 
-
-        if True:
+        # Validation
+        if m == 0: # full round of train on all models
             validation_loss = 0
             validation_loss_ae = 0
             validation_size = 0
 
-            for mm in range(num_models):
-                model[mm].eval()
+            for m_v in range(num_models):
+                model[m_v].eval()
             for batch_idx, batch_data in enumerate(data_validation, 1):
                 images, labels = batch_data['images'].cuda(), batch_data['labels']
 
@@ -127,13 +128,8 @@ if __name__ == '__main__':
                     # print(loss_v.shape)
                     # loss_v = torch.cat([loss_v, loss_v_i.unsqueeze(2)], dim=2)
                     outputs_v = torch.cat([outputs_v, torch.sigmoid(outputs).cpu().unsqueeze(2)], dim=2)
-                # loss_v = torch.min(loss_v, dim=2)[0]
-                # print(loss_v)
-                # print(loss_v.shape)
-                # loss_v = torch.mean(loss_v)
-                if num_models > 1:
-                    outputs_v = torch.where(outputs_v.mean(dim=2) > 0.5, outputs_v.max(dim=2)[0],
-                                            outputs_v.min(dim=2)[0])
+
+                outputs_v = torch.where(outputs_v.mean(dim=2) > 0.5, outputs_v.max(dim=2)[0], outputs_v.min(dim=2)[0])
                 loss_v = torch.nn.functional.binary_cross_entropy(outputs_v, labels)
                 # print(loss_v)
                 validation_loss += loss_v * labels.shape[0]
@@ -173,8 +169,8 @@ if __name__ == '__main__':
                         #validation_size += labels.shape[0]
 
                         outputs_t = torch.cat([outputs_t, torch.sigmoid(outputs).cpu().unsqueeze(2)], dim=2)
-                    if num_models > 1:
-                        outputs_t = torch.where(outputs_t.mean(dim=2) > 0.5, outputs_t.max(dim=2)[0], outputs_t.min(dim=2)[0])
+
+                    outputs_t = torch.where(outputs_t.mean(dim=2) > 0.5, outputs_t.max(dim=2)[0], outputs_t.min(dim=2)[0])
                     test_results[test_n:test_n+images.shape[0]] = outputs_t.numpy()
                     test_n += images.shape[0]
 
