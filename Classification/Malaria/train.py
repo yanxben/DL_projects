@@ -15,7 +15,7 @@ from data_utils.data_util import load_image_data, load_folder_data, save_outputs
 if __name__ == '__main__':
     ## Parameters
     mode = 'VGG'
-    num_models = 5
+    num_models = 1
     t = datetime.datetime.now()
     date = '{}-{:02d}-{:02d}_{:02d}{:02d}'.format(t.year, t.month, t.day, t.hour, t.minute)
     folder = mode + '__' + date
@@ -43,7 +43,7 @@ if __name__ == '__main__':
 
     # Train
     print('--- Training -------------')
-    best_loss = 1.0
+    best_loss = 0.12
     for t in range(1, epochs*num_models+1):
         m = t % num_models
         running_time = time.perf_counter()
@@ -51,6 +51,7 @@ if __name__ == '__main__':
         running_loss_ae = 0
         train_size = 0
 
+        model[m].train()
         if mode == 'VGG_EA':
             for batch_idx, batch_data in enumerate(data_validation, 1):
                 images, labels = batch_data['images'].cuda(), batch_data['labels'].cuda()
@@ -104,6 +105,9 @@ if __name__ == '__main__':
             validation_loss = 0
             validation_loss_ae = 0
             validation_size = 0
+
+            for mm in range(num_models):
+                model[mm].eval()
             for batch_idx, batch_data in enumerate(data_validation, 1):
                 images, labels = batch_data['images'].cuda(), batch_data['labels']
 
@@ -127,9 +131,9 @@ if __name__ == '__main__':
                 # print(loss_v)
                 # print(loss_v.shape)
                 # loss_v = torch.mean(loss_v)
-
-                outputs_v = torch.where(outputs_v.mean(dim=2) > 0.5, outputs_v.max(dim=2)[0],
-                                        outputs_v.min(dim=2)[0])
+                if num_models > 1:
+                    outputs_v = torch.where(outputs_v.mean(dim=2) > 0.5, outputs_v.max(dim=2)[0],
+                                            outputs_v.min(dim=2)[0])
                 loss_v = torch.nn.functional.binary_cross_entropy(outputs_v, labels)
                 # print(loss_v)
                 validation_loss += loss_v * labels.shape[0]
@@ -169,7 +173,8 @@ if __name__ == '__main__':
                         #validation_size += labels.shape[0]
 
                         outputs_t = torch.cat([outputs_t, torch.sigmoid(outputs).cpu().unsqueeze(2)], dim=2)
-                    outputs_t = torch.where(outputs_t.mean(dim=2) > 0.5, outputs_t.max(dim=2)[0], outputs_t.min(dim=2)[0])
+                    if num_models > 1:
+                        outputs_t = torch.where(outputs_t.mean(dim=2) > 0.5, outputs_t.max(dim=2)[0], outputs_t.min(dim=2)[0])
                     test_results[test_n:test_n+images.shape[0]] = outputs_t.numpy()
                     test_n += images.shape[0]
 
