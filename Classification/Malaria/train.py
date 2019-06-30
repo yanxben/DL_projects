@@ -17,7 +17,7 @@ if __name__ == '__main__':
     mode = 'VGG'
     num_models = 1
     t = datetime.datetime.now()
-    date = '{}-{:02d}-{:02d}_{:02d}{:02d}'.format(t.year, t.month, t.day, t.hour, t.minute)
+    date = '{}-{:02d}-{:02d}_{:02d}{:02d}{:02d}'.format(t.year, t.month, t.day, t.hour, t.minute, t.second)
     folder = mode + '__' + date
     root = '/media/yaniv/data2/datasets/Malaria'
     test = True
@@ -43,7 +43,7 @@ if __name__ == '__main__':
 
     # Train
     print('--- Training -------------')
-    best_loss = 0.12
+    best_loss = 0.1
     for t in range(1, epochs*num_models+1):
         m = t % num_models
         running_time = time.perf_counter()

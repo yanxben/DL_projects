@@ -8,27 +8,36 @@ class ENCODER(nn.Module):
             nn.Conv2d(3,features, 3, 1, 1),
             nn.ReLU(True),
             nn.InstanceNorm2d(features),
+            # nn.LayerNorm((32, 128, 128)),
             nn.MaxPool2d(2),
             nn.Conv2d(features, 64, 3, 1, 1),
             nn.ReLU(True),
             nn.InstanceNorm2d(64),
+            # nn.LayerNorm((64, 64, 64)),
             nn.MaxPool2d(2),
             nn.Dropout2d(0.1),
             nn.Conv2d(64, 128, 3, 1, 1),
             nn.ReLU(True),
             nn.InstanceNorm2d(128),
+            # nn.LayerNorm((128, 32, 32)),
             nn.MaxPool2d(2),
             nn.Dropout2d(0.1),
             nn.Conv2d(128, 256, 3, 1, 1),
             nn.ReLU(True),
             nn.InstanceNorm2d(256),
+            # nn.LayerNorm((256, 16, 16)),
             nn.MaxPool2d(2),
-            nn.Dropout2d(0.1),
+            nn.Dropout2d(0.2),
             nn.Conv2d(256, 512, 3, 1, 1),
             nn.ReLU(True),
-            nn.InstanceNorm2d(512),
+            nn.LayerNorm((512, 8, 8)),
             nn.MaxPool2d(2),
-            nn.Dropout2d(0.1)
+            nn.Dropout2d(0.2),
+            # nn.Conv2d(512, 512, 4, 1, 0),
+            # nn.ReLU(True),
+            # nn.InstanceNorm2d(512),
+            # # nn.MaxPool2d(2),
+            # nn.Dropout2d(0.1)
         )
 
     def forward(self, x):
@@ -62,23 +71,32 @@ class DECODER(nn.Module):
         return x
 
 
+class MLP(nn.Module):
+    def __init__(self, in_features, hidden_features, num_classes, dropout):
+        super().__init__()
+        self.classifier = nn.Sequential(
+            nn.Linear(in_features, hidden_features),
+            nn.ReLU(True),
+            nn.BatchNorm1d(hidden_features),
+            nn.Dropout(dropout),
+            nn.Linear(hidden_features, hidden_features),
+            nn.ReLU(True),
+            nn.BatchNorm1d(hidden_features),
+            nn.Dropout(dropout),
+            nn.Linear(hidden_features, num_classes),
+        )
+
+    def forward(self, x):
+        x = self.classifier(x)
+        return x
+
 
 class VGG(nn.Module):
     def __init__(self, features, num_classes=2):
         super(VGG, self).__init__()
         self.cnn = ENCODER(features)
         self.avgpool = nn.AdaptiveAvgPool2d((1,1))
-        self.classifier = nn.Sequential(
-            nn.Linear(512, 2048),
-            nn.ReLU(True),
-            nn.InstanceNorm1d(2048),
-            nn.Dropout(0.3),
-            nn.Linear(2048, 2048),
-            nn.ReLU(True),
-            nn.InstanceNorm1d(2048),
-            nn.Dropout(0.3),
-            nn.Linear(2048, num_classes),
-        )
+        self.classifier = MLP(512, 1024, num_classes, 0.3)
 
     def forward(self, x):
         # print(x.shape)
@@ -99,15 +117,7 @@ class VGG_AE(nn.Module):
         self.encoder = ENCODER(features)
         self.decoder = DECODER(features)
         self.avgpool = nn.AdaptiveAvgPool2d((1,1))
-        self.classifier = nn.Sequential(
-            nn.Linear(512, 2048),
-            nn.ReLU(True),
-            nn.Dropout(),
-            nn.Linear(2048, 2048),
-            nn.ReLU(True),
-            nn.Dropout(),
-            nn.Linear(2048, num_classes),
-        )
+        self.classifier = MLP(512, 1024, num_classes, 0.3)
 
     def forward(self, x, m1, m2):
         # print(x.shape)

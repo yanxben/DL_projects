@@ -25,7 +25,8 @@ class ImageDataset(Dataset):
 
         self.transforms = torchvision.transforms.Compose([
             torchvision.transforms.RandomHorizontalFlip(0.5),
-            torchvision.transforms.RandomRotation(180)
+            torchvision.transforms.RandomAffine(degrees=0, scale=(0.8, 1.0), fillcolor=0),
+            torchvision.transforms.RandomRotation(180.)
         ])
 
     def transform(self, image):

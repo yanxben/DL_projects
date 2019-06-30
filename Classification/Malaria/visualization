@@ -47,14 +47,15 @@ image = torch.from_numpy(image).permute([0,3,1,2])
 
 transforms = torchvision.transforms.Compose([
     torchvision.transforms.RandomHorizontalFlip(0.5),
-    torchvision.transforms.RandomRotation(0)
+    torchvision.transforms.RandomAffine(degrees=0, scale=(0.8,1.0), fillcolor=0),
+    torchvision.transforms.RandomRotation(180.)
 ])
 
-for j in range(10):
+for j in range(20):
 
     for i in range(3):
-        n = i * 10 + j
-        plt.subplot(3, 10, n + 1)
+        n = i * 20 + j
+        plt.subplot(3, 20, n + 1)
         if j > 0:
             image_pil = torchvision.transforms.functional.to_pil_image(image[i])
             image_pil_rotated = transforms(image_pil)
