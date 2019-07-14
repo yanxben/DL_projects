@@ -84,7 +84,7 @@ if __name__ == '__main__':
     save_count = 0
     print('End of initialization. Time Taken: %d sec' % (time.time() - t0))
 
-    opt.train_scheduler = opt.train_scheduler.split(',')
+    train_scheduler = opt.train_scheduler.split(',')
     for epoch in range(opt.epoch_start, opt.epochs + 1):    # outer loop for different epochs; we save the model by <epoch_count>, <epoch_count>+<save_latest_freq>
 
         epoch_start_time = time.time()  # timer for entire epoch
