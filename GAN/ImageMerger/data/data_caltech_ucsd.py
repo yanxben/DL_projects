@@ -297,31 +297,52 @@ def create_dataset_caltech_ucsd(path, batch_size, imsize=128, type='pickle', mod
 
 
 if __name__ == '__main__':
-    test = ['Red_winged_Blackbird_0017_583846699', 'Yellow_headed_Blackbird_0009_483173184',
-     'Lazuli_Bunting_0010_522399154', 'Painted_Bunting_0006_2862481106',
-     'Gray_Catbird_0031_148467783', 'Purple_Finch_0006_2329434675', 'American_Goldfinch_0004_155617438',
-     'Blue_Grosbeak_0008_2450854752', 'Green_Kingfisher_0002_228927324', 'Pied_Kingfisher_0002_1020026028']
+    negative_sampling = True
+    print_test = True
     version = 2
     if version == 1:
+        test = ['Red_winged_Blackbird_0017_583846699', 'Yellow_headed_Blackbird_0009_483173184',
+                'Lazuli_Bunting_0010_522399154', 'Painted_Bunting_0006_2862481106',
+                'Gray_Catbird_0031_148467783', 'Purple_Finch_0006_2329434675', 'American_Goldfinch_0004_155617438',
+                'Blue_Grosbeak_0008_2450854752', 'Green_Kingfisher_0002_228927324', 'Pied_Kingfisher_0002_1020026028']
         datapath = 'C:/Datasets/Caltech-UCSD-Birds-200'
     else:
+        test = None
         datapath = 'C:/Datasets/CUB_200_2011'
-    images, masks, labels, bboxes, testset, neg_images = load_caltech_data(datapath, mode='range', testset=test, testonly=False, version=version, negative_sampling=True)
-    images_cropped = crop_data(torch.from_numpy(testset['images'][:,:3]), testset['bboxes'], 80).numpy()
-    images_with_mask_cropped = crop_data(torch.from_numpy(np.concatenate((testset['images'], testset['masks']), axis=1)), testset['bboxes'], 80).numpy()
-    import matplotlib.pyplot as plt
-    plt.figure()
-    for i in range(testset['images'].shape[0]):
-        plt.subplot(3, 10, i + 1)
-        plt.imshow(testset['images'][i].transpose(1, 2, 0))
-        plt.title(testset['labels'][i])
-        plt.subplot(3, 10, i + 10 + 1)
-        plt.imshow(images_cropped[i].transpose(1, 2, 0))
-        plt.subplot(3, 10, i + 20 + 1)
-        plt.imshow(images_with_mask_cropped[i].transpose(1, 2, 0))
-        skimage.io.imsave(
-            os.path.join(os.path.split(os.getcwd())[0], 'testset', test[i] + '.jpg'),
-            testset['images'][i].transpose(1,2,0))
+    images, masks, labels, bboxes, testset, neg_images = load_caltech_data(datapath, mode='range', testset=test, testonly=False, version=version, negative_sampling=negative_sampling)
+    if negative_sampling:
+        os.mkdir('C:/Datasets/CUB_200_2011_IO')
+
+        os.mkdir('C:/Datasets/CUB_200_2011_IO/0')
+        for i in range(neg_images.shape[0]):
+            skimage.io.imsave(os.path.join('C:/Datasets/CUB_200_2011_IO/0', str(i) + '.jpg'), neg_images[i])
+
+        os.mkdir('C:/Datasets/CUB_200_2011_IO/1')
+        for i in range(images.shape[0]):
+            try:
+                image_cropped = crop_data(torch.from_numpy(images[i:i + 1]), bboxes[i:i + 1], 128).numpy()
+            except ValueError:
+                continue
+            skimage.io.imsave(os.path.join('C:/Datasets/CUB_200_2011_IO/1', str(i) + '.jpg'),
+                              image_cropped[0].transpose(1, 2, 0))
+
+
+    if print_test:
+        images_cropped = crop_data(torch.from_numpy(testset['images'][:,:3]), testset['bboxes'], 80).numpy()
+        images_with_mask_cropped = crop_data(torch.from_numpy(np.concatenate((testset['images'], testset['masks']), axis=1)), testset['bboxes'], 80).numpy()
+        import matplotlib.pyplot as plt
+        plt.figure()
+        for i in range(testset['images'].shape[0]):
+            plt.subplot(3, 10, i + 1)
+            plt.imshow(testset['images'][i].transpose(1, 2, 0))
+            plt.title(testset['labels'][i])
+            plt.subplot(3, 10, i + 10 + 1)
+            plt.imshow(images_cropped[i].transpose(1, 2, 0))
+            plt.subplot(3, 10, i + 20 + 1)
+            plt.imshow(images_with_mask_cropped[i].transpose(1, 2, 0))
+            skimage.io.imsave(
+                os.path.join(os.path.split(os.getcwd())[0], 'testset', test[i] + '.jpg'),
+                testset['images'][i].transpose(1,2,0))
     print('done')
 
 
